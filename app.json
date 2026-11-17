@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "CraftBuddy использует камеру для сканирования штрихкодов пива"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

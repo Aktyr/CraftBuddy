@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,6 +10,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { calculateBac } from "../lib/bac";
+import { isCheckinBlocked, isWaterActive } from "../lib/companion";
 import { useAppStore } from "../store/useAppStore";
 import { Checkin } from "../types";
 
@@ -21,6 +23,9 @@ const GLASSES = [
 
 export default function CheckinScreen() {
   const router = useRouter();
+  const profile = useAppStore((s) => s.profile);
+  const checkins = useAppStore((s) => s.checkins);
+  const lastWaterAt = useAppStore((s) => s.lastWaterAt);
   const addCheckin = useAppStore((s) => s.addCheckin);
 
   const [name, setName] = useState("");
@@ -28,6 +33,28 @@ export default function CheckinScreen() {
   const [abv, setAbv] = useState("5");
   const [rating, setRating] = useState(0);
   const [glass, setGlass] = useState("tulip");
+
+  const params = useLocalSearchParams<{
+    scannedName?: string;
+    scannedAbv?: string;
+    scannedBarcode?: string;
+  }>();
+
+  useEffect(() => {
+    if (params.scannedName) {
+      setName(params.scannedName);
+    }
+    if (params.scannedAbv) {
+      setAbv(params.scannedAbv);
+    }
+  }, [params.scannedName, params.scannedAbv]);
+
+  if (profile) {
+    const bac = calculateBac(checkins, profile);
+    if (isCheckinBlocked(bac) && !isWaterActive(lastWaterAt)) {
+      return <Redirect href="/" />;
+    }
+  }
 
   const volumeNum = parseInt(volume, 10);
   const abvNum = parseFloat(abv.replace(",", "."));

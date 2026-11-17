@@ -1,0 +1,42 @@
+[
+  {
+    "id": "beer-001",
+    "barcode": "4600000000017",
+    "name": "Hazy IPA",
+    "abv": 6.5,
+    "type": "ipa",
+    "brewery": "Craft Lab"
+  },
+  {
+    "id": "beer-002",
+    "barcode": "4600000000024",
+    "name": "Stout Imperial",
+    "abv": 9.0,
+    "type": "dark",
+    "brewery": "Craft Lab"
+  },
+  {
+    "id": "beer-003",
+    "barcode": "4600000000031",
+    "name": "Pilsner Classic",
+    "abv": 4.5,
+    "type": "light",
+    "brewery": "Craft Lab"
+  },
+  {
+    "id": "beer-004",
+    "barcode": "4600000000048",
+    "name": "Wheat Ale",
+    "abv": 5.2,
+    "type": "light",
+    "brewery": "Craft Lab"
+  },
+  {
+    "id": "beer-005",
+    "barcode": "4600000000055",
+    "name": "Double IPA",
+    "abv": 8.5,
+    "type": "ipa",
+    "brewery": "Craft Lab"
+  }
+]
