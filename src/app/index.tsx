@@ -120,6 +120,11 @@ export default function Home() {
             <Text style={styles.secondaryBtnText}>⚙️ Настройки</Text>
           </Pressable>
         </Link>
+        <Link href="/scanner" asChild>
+          <Pressable style={styles.secondaryBtn}>
+            <Text style={styles.secondaryBtnText}>📷 Сканировать</Text>
+          </Pressable>
+        </Link>
       </View>
 
       {isHardBlocked ? (
@@ -144,6 +149,11 @@ export default function Home() {
             style={styles.waterBtn}
             onPress={() => {
               drinkWater();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              Alert.alert(
+                "💧",
+                `Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
+              );
               if (Platform.OS === "web") {
                 window.alert(
                   `💧 Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,

@@ -17,6 +17,7 @@ import { GLASSES } from "../lib/constants";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { BeerType, Checkin } from "../types";
+import * as Haptics from "expo-haptics";
 
 export default function CheckinScreen() {
   const router = useRouter();
@@ -88,6 +89,7 @@ export default function CheckinScreen() {
       timestamp: Date.now(),
     };
     addCheckin(checkin);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };
 

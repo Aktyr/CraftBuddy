@@ -1,7 +1,7 @@
 import { Checkin, UserProfile } from "../types";
 
 const ALCOHOL_DENSITY = 0.789; // г/мл
-const ELIMINATION_RATE = 0.015; // промилле/час
+const ELIMINATION_RATE = 0.15; // промилле/час
 const ABSORPTION_MIN = 45; // минут на полное усвоение
 
 export function calculateBac(
