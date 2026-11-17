@@ -10,16 +10,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import TasteChips from "../components/TasteChips";
 import { calculateBac } from "../lib/bac";
-import { isCheckinBlocked, isWaterActive } from "../lib/companion";
+import { isCheckinBlocked } from "../lib/companion";
+import { GLASSES } from "../lib/constants";
+import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
-import { Checkin } from "../types";
-
-const GLASSES = [
-  { id: "tulip", label: "Тюльпан" },
-  { id: "pint", label: "Пинта" },
-  { id: "snifter", label: "Снифтер" },
-];
+import { BeerType, Checkin } from "../types";
 
 export default function CheckinScreen() {
   const router = useRouter();
@@ -32,33 +29,32 @@ export default function CheckinScreen() {
   const [volume, setVolume] = useState("500");
   const [abv, setAbv] = useState("5");
   const [rating, setRating] = useState(0);
-  const [glass, setGlass] = useState("tulip");
+  const [glass, setGlass] = useState(GLASSES[0].id);
+  const [beerType, setBeerType] = useState<BeerType>("light");
+  const [tasteTags, setTasteTags] = useState<string[]>([]);
 
   const params = useLocalSearchParams<{
     scannedName?: string;
     scannedAbv?: string;
     scannedBarcode?: string;
+    scannedType?: BeerType;
   }>();
 
   useEffect(() => {
-    if (params.scannedName) {
-      setName(params.scannedName);
-    }
-    if (params.scannedAbv) {
-      setAbv(params.scannedAbv);
-    }
-  }, [params.scannedName, params.scannedAbv]);
+    if (params.scannedName) setName(params.scannedName);
+    if (params.scannedAbv) setAbv(params.scannedAbv);
+    if (params.scannedType) setBeerType(params.scannedType);
+  }, [params]);
 
   if (profile) {
     const bac = calculateBac(checkins, profile);
-    if (isCheckinBlocked(bac) && !isWaterActive(lastWaterAt)) {
+    if (isCheckinBlocked(bac, lastWaterAt)) {
       return <Redirect href="/" />;
     }
   }
 
   const volumeNum = parseInt(volume, 10);
   const abvNum = parseFloat(abv.replace(",", "."));
-
   const isValid =
     name.trim().length > 0 &&
     !isNaN(volumeNum) &&
@@ -69,6 +65,15 @@ export default function CheckinScreen() {
     abvNum <= 60 &&
     rating > 0;
 
+  const TYPES: BeerType[] = ["light", "wheat", "ipa", "dark", "stout"];
+  const TYPE_LABELS: Record<BeerType, string> = {
+    light: "Светлое",
+    wheat: "Пшеничное",
+    ipa: "IPA",
+    dark: "Тёмное",
+    stout: "Стаут",
+  };
+
   const onSave = () => {
     const checkin: Checkin = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -77,7 +82,9 @@ export default function CheckinScreen() {
       abv: abvNum,
       rating,
       glassType: glass,
-      tasteTags: [],
+      beerType,
+      tasteTags,
+      isNew: true,
       timestamp: Date.now(),
     };
     addCheckin(checkin);
@@ -101,7 +108,7 @@ export default function CheckinScreen() {
           value={name}
           onChangeText={setName}
           placeholder="Например, Hazy IPA"
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={colors.textLight}
         />
 
         <View style={styles.row}>
@@ -113,7 +120,7 @@ export default function CheckinScreen() {
               onChangeText={setVolume}
               keyboardType="numeric"
               placeholder="500"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textLight}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -124,9 +131,29 @@ export default function CheckinScreen() {
               onChangeText={setAbv}
               keyboardType="decimal-pad"
               placeholder="5.0"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textLight}
             />
           </View>
+        </View>
+
+        <Text style={styles.label}>Тип пива</Text>
+        <View style={styles.row}>
+          {TYPES.map((t) => (
+            <Pressable
+              key={t}
+              style={[styles.chip, beerType === t && styles.chipActive]}
+              onPress={() => setBeerType(t)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  beerType === t && styles.chipTextActive,
+                ]}
+              >
+                {TYPE_LABELS[t]}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         <Text style={styles.label}>Оценка</Text>
@@ -154,11 +181,14 @@ export default function CheckinScreen() {
                   glass === g.id && styles.chipTextActive,
                 ]}
               >
-                {g.label}
+                {g.emoji} {g.label}
               </Text>
             </Pressable>
           ))}
         </View>
+
+        <Text style={styles.label}>Вкус</Text>
+        <TasteChips selected={tasteTags} onChange={setTasteTags} />
 
         <Pressable
           style={[styles.button, !isValid && styles.buttonDisabled]}
@@ -167,7 +197,6 @@ export default function CheckinScreen() {
         >
           <Text style={styles.buttonText}>Сохранить</Text>
         </Pressable>
-
         <Pressable style={styles.cancel} onPress={() => router.back()}>
           <Text style={styles.cancelText}>Отмена</Text>
         </Pressable>
@@ -177,54 +206,58 @@ export default function CheckinScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, backgroundColor: "#FFFBEB", flexGrow: 1 },
+  container: { padding: 24, backgroundColor: colors.bg, flexGrow: 1 },
   title: {
     fontSize: 26,
     fontWeight: "bold",
-    color: "#78350F",
+    color: colors.textPrimary,
     marginBottom: 20,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#78350F",
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#fff",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
   },
-  row: { flexDirection: "row", gap: 12 },
+  row: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   stars: { flexDirection: "row", gap: 6 },
-  star: { fontSize: 36, color: "#E5E7EB" },
-  starActive: { color: "#F59E0B" },
+  star: { fontSize: 36, color: colors.inactive },
+  starActive: { color: colors.primary },
   chip: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
-    backgroundColor: "#fff",
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
+    minWidth: 80,
   },
-  chipActive: { borderColor: "#F59E0B", backgroundColor: "#FEF3C7" },
-  chipText: { fontSize: 13, color: "#6B7280" },
-  chipTextActive: { color: "#78350F", fontWeight: "700" },
+  chipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  chipText: { fontSize: 12, color: colors.textMuted },
+  chipTextActive: { color: colors.textPrimary, fontWeight: "700" },
   button: {
     marginTop: 28,
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: "#F59E0B",
+    backgroundColor: colors.primary,
     alignItems: "center",
   },
   buttonDisabled: { opacity: 0.4 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   cancel: { marginTop: 12, alignItems: "center", paddingVertical: 8 },
-  cancelText: { color: "#92400E", fontSize: 14 },
+  cancelText: { color: colors.textSecondary, fontSize: 14 },
 });

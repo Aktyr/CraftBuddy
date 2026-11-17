@@ -1,14 +1,16 @@
 import * as Haptics from "expo-haptics";
 import { Link } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BacChart from "../components/BacChart";
 import BeerGlass from "../components/BeerGlass";
 import Companion from "../components/Companion";
@@ -18,12 +20,20 @@ import {
   isCheckinBlocked,
   isWaterActive,
 } from "../lib/companion";
-import { BAC_LIMIT, LEVEL_XP, WATER_UNLOCK_MIN } from "../lib/constants";
+import {
+  BAC_HARD_LIMIT,
+  BAC_LIMIT,
+  LEVEL_XP,
+  WATER_UNLOCK_MIN,
+} from "../lib/constants";
+import { computeStats } from "../lib/stats";
+import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 
 const LEVEL_UP_DISPLAY_MS = 2000;
 
 export default function Home() {
+  const insets = useSafeAreaInsets();
   const { profile, checkins, xp, lastWaterAt, drinkWater } = useAppStore();
   const [now, setNow] = useState(Date.now());
   const [justLeveledUp, setJustLeveledUp] = useState(false);
@@ -52,47 +62,98 @@ export default function Home() {
 
   const bac = calculateBac(checkins, profile, now);
   const state = getCompanionState(bac, justLeveledUp);
-
   const waterActive = isWaterActive(lastWaterAt, now);
-  const blocked = isCheckinBlocked(bac) && !waterActive;
+  const blocked = isCheckinBlocked(bac, lastWaterAt, now);
+  const isHardBlocked = bac > BAC_HARD_LIMIT;
   const fillLevel = Math.min(1, bac / BAC_LIMIT);
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <BeerGlass fillLevel={fillLevel} size={130} />
-      <Companion state={state} />
+  const stats = useMemo(() => computeStats(checkins), [checkins]);
+  const lastType =
+    checkins.length > 0 ? checkins[checkins.length - 1].beerType : "light";
 
+  return (
+    <ScrollView
+      contentContainerStyle={[
+        styles.container,
+        { paddingBottom: insets.bottom + 24 },
+      ]}
+    >
+      <BeerGlass
+        fillLevel={fillLevel}
+        size={130}
+        beerType={
+          checkins.length > 0 ? checkins[checkins.length - 1].beerType : "light"
+        }
+      />
+      <Companion state={state} />
       <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
       <Text style={styles.muted}>
         Чекинов: {checkins.length} · XP: {xp} · Ур.{" "}
         {Math.floor(xp / LEVEL_XP) + 1}
       </Text>
 
+      {checkins.length > 0 && (
+        <View style={styles.statsRow}>
+          <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
+          <Text style={styles.statItem}>🍺 {stats.favoriteStyle}</Text>
+          <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
+        </View>
+      )}
+
       <BacChart checkins={checkins} profile={profile} now={now} />
 
-      {/* Ссылка на историю */}
-      <Link href="/history" asChild>
-        <Pressable style={styles.historyBtn}>
-          <Text style={styles.historyBtnText}>
-            📋 История ({checkins.length})
-          </Text>
-        </Pressable>
-      </Link>
+      <View style={styles.actions}>
+        <Link href="/achievements" asChild>
+          <Pressable style={styles.secondaryBtn}>
+            <Text style={styles.secondaryBtnText}>🏆 Достижения</Text>
+          </Pressable>
+        </Link>
+        <Link href="/history" asChild>
+          <Pressable style={styles.secondaryBtn}>
+            <Text style={styles.secondaryBtnText}>
+              📋 История ({checkins.length})
+            </Text>
+          </Pressable>
+        </Link>
+        <Link href="/settings" asChild>
+          <Pressable style={styles.secondaryBtn}>
+            <Text style={styles.secondaryBtnText}>⚙️ Настройки</Text>
+          </Pressable>
+        </Link>
+      </View>
 
-      {blocked ? (
+      {isHardBlocked ? (
+        <View style={styles.blocked}>
+          <Text style={styles.blockedTitle}>⛔ Критический уровень</Text>
+          <Text style={styles.blockedText}>
+            BAC слишком высок. Виртуальная вода не поможет. Пожалуйста,
+            подождите, пока алкоголь выветрится.
+          </Text>
+          <Text style={styles.hardBlockHint}>
+            Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки: 1.5)
+          </Text>
+        </View>
+      ) : blocked ? (
         <View style={styles.blocked}>
           <Text style={styles.blockedTitle}>Лимит превышен</Text>
           <Text style={styles.blockedText}>
-            Добавление пива заблокировано. Выпейте стакан воды.
+            Добавление пива заблокировано. Выпейте стакан воды, чтобы получить
+            временный доступ.
           </Text>
           <Pressable
             style={styles.waterBtn}
             onPress={() => {
               drinkWater();
-              Alert.alert(
-                "💧",
-                `Блокировка снята на ${WATER_UNLOCK_MIN} минут`,
-              );
+              if (Platform.OS === "web") {
+                window.alert(
+                  `💧 Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
+                );
+              } else {
+                Alert.alert(
+                  "💧",
+                  `Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
+                );
+              }
             }}
           >
             <Text style={styles.waterText}>💧 Выпить воды</Text>
@@ -119,41 +180,69 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: colors.bg,
   },
   bac: {
     fontSize: 36,
     fontWeight: "bold",
-    color: "#78350F",
+    color: colors.textPrimary,
     marginBottom: 4,
     marginTop: 8,
   },
-  muted: { fontSize: 13, color: "#92400E", marginBottom: 8 },
+  muted: { fontSize: 13, color: colors.textSecondary, marginBottom: 8 },
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 10,
+  },
+  statItem: { fontSize: 12, color: colors.textPrimary, fontWeight: "600" },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  secondaryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.primarySoft,
+  },
+  secondaryBtnText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   button: {
-    marginTop: 20,
+    marginTop: 16,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "#F59E0B",
+    backgroundColor: colors.primary,
   },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   blocked: {
-    marginTop: 20,
+    marginTop: 16,
     padding: 20,
     borderRadius: 16,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: colors.dangerSoft,
     alignItems: "center",
     maxWidth: 320,
   },
   blockedTitle: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#991B1B",
+    color: colors.dangerText,
     marginBottom: 6,
   },
   blockedText: {
     fontSize: 13,
-    color: "#991B1B",
+    color: colors.dangerText,
     textAlign: "center",
     marginBottom: 14,
   },
@@ -161,20 +250,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: "#3B82F6",
+    backgroundColor: colors.info,
+  },
+  hardBlockHint: {
+    marginTop: 8,
+    fontSize: 12,
+    color: "#991B1B",
+    fontWeight: "bold",
+    backgroundColor: "rgba(255,255,255,0.5)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   waterText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  hint: { marginTop: 12, fontSize: 12, color: "#2563EB" },
-  historyBtn: {
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "#FEF3C7",
-  },
-  historyBtnText: {
-    color: "#92400E",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  hint: { marginTop: 12, fontSize: 12, color: colors.infoText },
 });

@@ -1,11 +1,12 @@
 import beersData from "../data/beers.json";
+import { BeerType } from "../types";
 
 export interface BeerRecord {
   id: string;
   barcode: string;
   name: string;
   abv: number;
-  type: "light" | "dark" | "ipa";
+  type: BeerType;
   brewery: string;
 }
 

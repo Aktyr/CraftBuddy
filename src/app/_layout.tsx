@@ -9,17 +9,19 @@ export default function RootLayout() {
 
   useEffect(() => {
     const inOnboarding = segments[0] === "onboarding";
-    if (!profile && !inOnboarding) {
-      router.replace("/onboarding");
-    } else if (profile && inOnboarding) {
-      router.replace("/");
-    }
+    if (!profile && !inOnboarding) router.replace("/onboarding");
+    else if (profile && inOnboarding) router.replace("/");
   }, [profile, segments]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="index" />
+      <Stack.Screen name="checkin" />
+      <Stack.Screen name="history" />
+      <Stack.Screen name="scanner" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="achievements" />
     </Stack>
   );
 }

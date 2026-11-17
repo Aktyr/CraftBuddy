@@ -1,6 +1,6 @@
 [
   {
-    "id": "beer-001",
+    "id": "b01",
     "barcode": "4600000000017",
     "name": "Hazy IPA",
     "abv": 6.5,
@@ -8,15 +8,15 @@
     "brewery": "Craft Lab"
   },
   {
-    "id": "beer-002",
+    "id": "b02",
     "barcode": "4600000000024",
     "name": "Stout Imperial",
     "abv": 9.0,
-    "type": "dark",
+    "type": "stout",
     "brewery": "Craft Lab"
   },
   {
-    "id": "beer-003",
+    "id": "b03",
     "barcode": "4600000000031",
     "name": "Pilsner Classic",
     "abv": 4.5,
@@ -24,19 +24,179 @@
     "brewery": "Craft Lab"
   },
   {
-    "id": "beer-004",
+    "id": "b04",
     "barcode": "4600000000048",
     "name": "Wheat Ale",
     "abv": 5.2,
-    "type": "light",
+    "type": "wheat",
     "brewery": "Craft Lab"
   },
   {
-    "id": "beer-005",
+    "id": "b05",
     "barcode": "4600000000055",
     "name": "Double IPA",
     "abv": 8.5,
     "type": "ipa",
     "brewery": "Craft Lab"
+  },
+  {
+    "id": "b06",
+    "barcode": "4600000000062",
+    "name": "Amber Lager",
+    "abv": 5.0,
+    "type": "light",
+    "brewery": "HopHead"
+  },
+  {
+    "id": "b07",
+    "barcode": "4600000000079",
+    "name": "Porter Baltic",
+    "abv": 7.2,
+    "type": "dark",
+    "brewery": "HopHead"
+  },
+  {
+    "id": "b08",
+    "barcode": "4600000000086",
+    "name": "Session IPA",
+    "abv": 4.3,
+    "type": "ipa",
+    "brewery": "HopHead"
+  },
+  {
+    "id": "b09",
+    "barcode": "4600000000093",
+    "name": "Belgian Wit",
+    "abv": 4.8,
+    "type": "wheat",
+    "brewery": "MonkBrew"
+  },
+  {
+    "id": "b10",
+    "barcode": "4600000000109",
+    "name": "Czech Pilsner",
+    "abv": 4.4,
+    "type": "light",
+    "brewery": "MonkBrew"
+  },
+  {
+    "id": "b11",
+    "barcode": "4600000000116",
+    "name": "Milk Stout",
+    "abv": 5.8,
+    "type": "stout",
+    "brewery": "DarkSide"
+  },
+  {
+    "id": "b12",
+    "barcode": "4600000000123",
+    "name": "West Coast IPA",
+    "abv": 7.0,
+    "type": "ipa",
+    "brewery": "DarkSide"
+  },
+  {
+    "id": "b13",
+    "barcode": "4600000000130",
+    "name": "Helles",
+    "abv": 4.7,
+    "type": "light",
+    "brewery": "Bavaria"
+  },
+  {
+    "id": "b14",
+    "barcode": "4600000000147",
+    "name": "Dunkel",
+    "abv": 5.1,
+    "type": "dark",
+    "brewery": "Bavaria"
+  },
+  {
+    "id": "b15",
+    "barcode": "4600000000154",
+    "name": "NEIPA Citra",
+    "abv": 6.8,
+    "type": "ipa",
+    "brewery": "JuiceLab"
+  },
+  {
+    "id": "b16",
+    "barcode": "4600000000161",
+    "name": "Berliner Weisse",
+    "abv": 3.4,
+    "type": "wheat",
+    "brewery": "JuiceLab"
+  },
+  {
+    "id": "b17",
+    "barcode": "4600000000178",
+    "name": "Russian Stout",
+    "abv": 10.5,
+    "type": "stout",
+    "brewery": "NorthBrew"
+  },
+  {
+    "id": "b18",
+    "barcode": "4600000000185",
+    "name": "Blonde Ale",
+    "abv": 5.0,
+    "type": "light",
+    "brewery": "NorthBrew"
+  },
+  {
+    "id": "b19",
+    "barcode": "4600000000192",
+    "name": "Black IPA",
+    "abv": 7.2,
+    "type": "ipa",
+    "brewery": "ShadowCraft"
+  },
+  {
+    "id": "b20",
+    "barcode": "4600000000208",
+    "name": "Schwarzbier",
+    "abv": 4.9,
+    "type": "dark",
+    "brewery": "ShadowCraft"
+  },
+  {
+    "id": "b21",
+    "barcode": "4600000000215",
+    "name": "Hefeweizen",
+    "abv": 5.4,
+    "type": "wheat",
+    "brewery": "WheatKing"
+  },
+  {
+    "id": "b22",
+    "barcode": "4600000000222",
+    "name": "Vienna Lager",
+    "abv": 5.3,
+    "type": "light",
+    "brewery": "WheatKing"
+  },
+  {
+    "id": "b23",
+    "barcode": "4600000000239",
+    "name": "Oatmeal Stout",
+    "abv": 6.0,
+    "type": "stout",
+    "brewery": "SmoothBrew"
+  },
+  {
+    "id": "b24",
+    "barcode": "4600000000246",
+    "name": "Red Ale",
+    "abv": 5.6,
+    "type": "dark",
+    "brewery": "SmoothBrew"
+  },
+  {
+    "id": "b25",
+    "barcode": "4600000000253",
+    "name": "Brut IPA",
+    "abv": 7.5,
+    "type": "ipa",
+    "brewery": "DryHop"
   }
 ]

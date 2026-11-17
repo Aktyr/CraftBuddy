@@ -34,7 +34,11 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@react-native/jest-preset": "^0.88.1",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
+    "jest": "^30.5.2",
+    "jest-expo": "^58.0.15",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -43,7 +47,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "private": true
 }

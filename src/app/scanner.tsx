@@ -8,18 +8,15 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { findBeerByBarcode } from "../lib/beers";
+import { colors } from "../lib/theme";
 
 export default function ScannerScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
 
-  // 1. Пока разрешение не запрошено — пустой экран (избегаем мигания)
-  if (!permission) {
-    return <View style={styles.container} />;
-  }
+  if (!permission) return <View style={styles.container} />;
 
-  // 2. Разрешение не выдано — показываем кнопку запроса
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -37,18 +34,19 @@ export default function ScannerScreen() {
     );
   }
 
-  // 3. Обработчик сканирования
   const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
-    if (scanned) return; // защита от повторных срабатываний
+    if (scanned) return;
     setScanned(true);
-
     const beer = findBeerByBarcode(result.data);
     if (beer) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Возвращаемся на чекин с предзаполненными полями
       router.replace({
         pathname: "/checkin",
-        params: { scannedName: beer.name, scannedAbv: String(beer.abv) },
+        params: {
+          scannedName: beer.name,
+          scannedAbv: String(beer.abv),
+          scannedType: beer.type,
+        },
       });
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -91,7 +89,7 @@ const styles = StyleSheet.create({
   button: {
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: "#F59E0B",
+    backgroundColor: colors.primary,
     alignItems: "center",
   },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
@@ -107,7 +105,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: "#fff",
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.overlay,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
