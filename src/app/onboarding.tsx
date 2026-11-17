@@ -1,0 +1,127 @@
+import Slider from "@react-native-community/slider";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useAppStore } from "../store/useAppStore";
+import { Gender } from "../types";
+
+export default function Onboarding() {
+  const setProfile = useAppStore((s) => s.setProfile);
+  const router = useRouter();
+  const [weight, setWeight] = useState(70);
+  const [gender, setGender] = useState<Gender | null>(null);
+
+  const canContinue = gender !== null;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>CraftBuddy</Text>
+      <Text style={styles.subtitle}>Немного о вас — нужно для расчёта BAC</Text>
+
+      <View style={styles.block}>
+        <Text style={styles.label}>Вес: {Math.round(weight)} кг</Text>
+        <Slider
+          style={styles.slider}
+          minimumValue={40}
+          maximumValue={150}
+          step={1}
+          value={weight}
+          onValueChange={setWeight}
+          minimumTrackTintColor="#F59E0B"
+          maximumTrackTintColor="#E5E7EB"
+          thumbTintColor="#F59E0B"
+        />
+        <View style={styles.range}>
+          <Text style={styles.rangeText}>40</Text>
+          <Text style={styles.rangeText}>150</Text>
+        </View>
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.label}>Пол</Text>
+        <View style={styles.row}>
+          <Pressable
+            style={[styles.option, gender === "male" && styles.optionActive]}
+            onPress={() => setGender("male")}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                gender === "male" && styles.optionTextActive,
+              ]}
+            >
+              Мужской
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.option, gender === "female" && styles.optionActive]}
+            onPress={() => setGender("female")}
+          >
+            <Text
+              style={[
+                styles.optionText,
+                gender === "female" && styles.optionTextActive,
+              ]}
+            >
+              Женский
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <Pressable
+        style={[styles.button, !canContinue && styles.buttonDisabled]}
+        disabled={!canContinue}
+        onPress={() => {
+          setProfile({ weightKg: Math.round(weight), gender: gender! });
+          router.replace("/");
+        }}
+      >
+        <Text style={styles.buttonText}>Продолжить</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#FFFBEB",
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#78350F",
+    marginBottom: 8,
+  },
+  subtitle: { fontSize: 14, color: "#92400E", marginBottom: 32 },
+  block: { marginBottom: 28 },
+  label: { fontSize: 16, fontWeight: "600", color: "#78350F", marginBottom: 8 },
+  slider: { width: "100%", height: 40 },
+  range: { flexDirection: "row", justifyContent: "space-between" },
+  rangeText: { fontSize: 12, color: "#92400E" },
+  row: { flexDirection: "row", gap: 12 },
+  option: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  optionActive: { borderColor: "#F59E0B", backgroundColor: "#FEF3C7" },
+  optionText: { fontSize: 15, color: "#6B7280", fontWeight: "500" },
+  optionTextActive: { color: "#78350F", fontWeight: "700" },
+  button: {
+    marginTop: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: "#F59E0B",
+    alignItems: "center",
+  },
+  buttonDisabled: { opacity: 0.4 },
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+});
