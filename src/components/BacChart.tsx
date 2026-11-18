@@ -1,10 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useAnimatedProps,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 import Svg, {
   Circle,
   Line,
@@ -15,8 +10,6 @@ import Svg, {
 import { calculateBac } from "../lib/bac";
 import { BAC_LIMIT } from "../lib/constants";
 import { Checkin, UserProfile } from "../types";
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const WIDTH = 340;
 const HEIGHT = 180;
@@ -29,8 +22,6 @@ interface Props {
 }
 
 export default function BacChart({ checkins, profile, now }: Props) {
-  const currentY = useSharedValue(0);
-
   const data = useMemo(() => {
     if (checkins.length === 0) return null;
 
@@ -50,32 +41,25 @@ export default function BacChart({ checkins, profile, now }: Props) {
     const chartW = WIDTH - PADDING * 2;
     const chartH = HEIGHT - PADDING * 2;
     const timeRange = endTime - firstTime;
-
     const toX = (t: number) => PADDING + ((t - firstTime) / timeRange) * chartW;
     const toY = (v: number) => PADDING + chartH - (v / maxBac) * chartH;
 
-    // Создаём плавную кривую через все точки
+    // Кубические кривые Безье для плавной линии
     let pathData = `M ${toX(samples[0].t)},${toY(samples[0].v)}`;
     for (let i = 1; i < samples.length; i++) {
-      const prev = samples[i - 1];
-      const curr = samples[i];
-      const prevX = toX(prev.t);
-      const prevY = toY(prev.v);
-      const currX = toX(curr.t);
-      const currY = toY(curr.v);
-
-      // Контрольные точки для плавной кривой (tension = 0.3)
+      const prevX = toX(samples[i - 1].t);
+      const prevY = toY(samples[i - 1].v);
+      const currX = toX(samples[i].t);
+      const currY = toY(samples[i].v);
       const tension = 0.3;
-      const cp1x = prevX + (currX - prevX) * tension;
-      const cp1y = prevY + (currY - prevY) * tension;
-      const cp2x = prevX + (currX - prevX) * (1 - tension);
-      const cp2y = prevY + (currY - prevY) * (1 - tension);
-
-      pathData += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${currX},${currY}`;
+      pathData += ` C ${prevX + (currX - prevX) * tension},${
+        prevY + (currY - prevY) * tension
+      } ${prevX + (currX - prevX) * (1 - tension)},${
+        prevY + (currY - prevY) * (1 - tension)
+      } ${currX},${currY}`;
     }
 
     const currentBac = calculateBac(checkins, profile, now);
-
     return {
       pathData,
       currentPoint: { x: toX(now), y: toY(currentBac) },
@@ -86,23 +70,13 @@ export default function BacChart({ checkins, profile, now }: Props) {
     };
   }, [checkins, profile, now]);
 
-  // Анимация точки "Сейчас" через Reanimated
-  useEffect(() => {
-    if (data) {
-      currentY.value = withTiming(data.currentPoint.y, { duration: 500 });
-    }
-  }, [data?.currentPoint.y]);
-
-  const animatedCircleProps = useAnimatedProps(() => ({
-    cy: currentY.value,
-  }));
-
   if (!data) return null;
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Динамика опьянения (BAC)</Text>
       <Svg width={WIDTH} height={HEIGHT}>
+        {/* Безопасная зона ниже лимита */}
         <Rect
           x={PADDING}
           y={data.toY(BAC_LIMIT)}
@@ -111,6 +85,7 @@ export default function BacChart({ checkins, profile, now }: Props) {
           fill="#ECFDF5"
           opacity={0.4}
         />
+        {/* Зона превышения выше лимита */}
         <Rect
           x={PADDING}
           y={PADDING}
@@ -173,7 +148,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
           {BAC_LIMIT}
         </SvgText>
 
-        {/* кривая BAC */}
         <Path
           d={data.pathData}
           fill="none"
@@ -183,10 +157,10 @@ export default function BacChart({ checkins, profile, now }: Props) {
           strokeLinejoin="round"
         />
 
-        {/* Анимированная точка через Reanimated */}
-        <AnimatedCircle
-          animatedProps={animatedCircleProps}
+        {/* Точка "Сейчас" — статичная, обновляется через now */}
+        <Circle
           cx={data.currentPoint.x}
+          cy={data.currentPoint.y}
           r={6}
           fill="#F59E0B"
           stroke="#fff"
@@ -213,7 +187,12 @@ export default function BacChart({ checkins, profile, now }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 16, alignItems: "center" },
-  title: { fontSize: 14, color: "#78350F", marginBottom: 8, fontWeight: "700" },
+  title: {
+    fontSize: 14,
+    color: "#78350F",
+    marginBottom: 8,
+    fontWeight: "700",
+  },
   legend: { flexDirection: "row", gap: 16, marginTop: 8 },
   legendItem: { fontSize: 11, color: "#92400E" },
 });

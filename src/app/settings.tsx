@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
+import AppHeader from "../components/AppHeader";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { Gender } from "../types";
@@ -30,98 +31,83 @@ export default function SettingsScreen() {
   };
 
   const confirmReset = () => {
+    const doReset = () => {
+      resetAll();
+      router.replace("/onboarding");
+    };
     if (Platform.OS === "web") {
-      // На вебе используем браузерный confirm
       if (
         window.confirm(
           "Сбросить всё? История, профиль и достижения будут удалены.",
         )
-      ) {
-        resetAll();
-        router.replace("/onboarding");
-      }
+      )
+        doReset();
     } else {
-      // На мобильных — нативный Alert
       Alert.alert(
         "Сбросить всё?",
         "История, профиль и достижения будут удалены.",
         [
           { text: "Отмена", style: "cancel" },
-          {
-            text: "Сбросить",
-            style: "destructive",
-            onPress: () => {
-              resetAll();
-              router.replace("/onboarding");
-            },
-          },
+          { text: "Сбросить", style: "destructive", onPress: doReset },
         ],
       );
     }
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Настройки</Text>
+    <View style={styles.container}>
+      <AppHeader title="Настройки" />
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.label}>Вес: {Math.round(weight)} кг</Text>
+        <Slider
+          style={styles.slider}
+          minimumValue={40}
+          maximumValue={150}
+          step={1}
+          value={weight}
+          onValueChange={setWeight}
+          minimumTrackTintColor={colors.primary}
+          maximumTrackTintColor={colors.inactive}
+          thumbTintColor={colors.primary}
+        />
 
-      <Text style={styles.label}>Вес: {Math.round(weight)} кг</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={40}
-        maximumValue={150}
-        step={1}
-        value={weight}
-        onValueChange={setWeight}
-        minimumTrackTintColor={colors.primary}
-        maximumTrackTintColor={colors.inactive}
-        thumbTintColor={colors.primary}
-      />
-
-      <Text style={styles.label}>Пол</Text>
-      <View style={styles.row}>
-        {(["male", "female"] as Gender[]).map((g) => {
-          const active = gender === g;
-          return (
-            <Pressable
-              key={g}
-              style={[styles.option, active && styles.optionActive]}
-              onPress={() => setGender(g)}
-            >
-              <Text
-                style={[styles.optionText, active && styles.optionTextActive]}
+        <Text style={styles.label}>Пол</Text>
+        <View style={styles.row}>
+          {(["male", "female"] as Gender[]).map((g) => {
+            const active = gender === g;
+            return (
+              <Pressable
+                key={g}
+                style={[styles.option, active && styles.optionActive]}
+                onPress={() => setGender(g)}
               >
-                {g === "male" ? "Мужской" : "Женский"}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <Text
+                  style={[styles.optionText, active && styles.optionTextActive]}
+                >
+                  {g === "male" ? "Мужской" : "Женский"}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-      <Pressable style={styles.saveBtn} onPress={save}>
-        <Text style={styles.saveBtnText}>Сохранить профиль</Text>
-      </Pressable>
+        <Pressable style={styles.saveBtn} onPress={save}>
+          <Text style={styles.saveBtnText}>Сохранить профиль</Text>
+        </Pressable>
 
-      <Pressable style={styles.resetBtn} onPress={confirmReset}>
-        <Text style={styles.resetBtnText}>🗑 Сбросить всю историю</Text>
-      </Pressable>
+        <Pressable style={styles.resetBtn} onPress={confirmReset}>
+          <Text style={styles.resetBtnText}>🗑 Сбросить всю историю</Text>
+        </Pressable>
 
-      <Text style={styles.version}>CraftBuddy v1.0.0</Text>
-
-      <Pressable style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>Назад</Text>
-      </Pressable>
-    </ScrollView>
+        <Text style={styles.version}>CraftBuddy v1.0.0</Text>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, backgroundColor: colors.bg, flexGrow: 1 },
-  title: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: colors.textPrimary,
-    marginBottom: 24,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: 24 },
   label: {
     fontSize: 14,
     fontWeight: "600",
@@ -167,12 +153,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 24,
   },
-  backBtn: {
-    marginTop: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: colors.inactive,
-    alignItems: "center",
-  },
-  backBtnText: { color: colors.textMuted, fontSize: 16, fontWeight: "600" },
 });

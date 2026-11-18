@@ -1,5 +1,6 @@
+import { DrawerActions } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { Link } from "expo-router";
+import { Link, useNavigation } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -11,9 +12,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AppHeader from "../components/AppHeader";
 import BacChart from "../components/BacChart";
 import BeerGlass from "../components/BeerGlass";
 import Companion from "../components/Companion";
+import QrIcon from "../components/icons/QrIcon";
 import { calculateBac } from "../lib/bac";
 import {
   getCompanionState,
@@ -34,13 +37,14 @@ const LEVEL_UP_DISPLAY_MS = 2000;
 
 export default function Home() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
   const { profile, checkins, xp, lastWaterAt, drinkWater } = useAppStore();
   const [now, setNow] = useState(Date.now());
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 20_000);
+    const t = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(t);
   }, []);
 
@@ -63,134 +67,107 @@ export default function Home() {
   const bac = calculateBac(checkins, profile, now);
   const state = getCompanionState(bac, justLeveledUp);
   const waterActive = isWaterActive(lastWaterAt, now);
-  const blocked = isCheckinBlocked(bac, lastWaterAt, now);
+  const blocked = isCheckinBlocked(bac, lastWaterAt, now, checkins, profile);
   const isHardBlocked = bac > BAC_HARD_LIMIT;
   const fillLevel = Math.min(1, bac / BAC_LIMIT);
-
   const stats = useMemo(() => computeStats(checkins), [checkins]);
   const lastType =
     checkins.length > 0 ? checkins[checkins.length - 1].beerType : "light";
 
   return (
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        { paddingBottom: insets.bottom + 24 },
-      ]}
-    >
-      <BeerGlass
-        fillLevel={fillLevel}
-        size={130}
-        beerType={
-          checkins.length > 0 ? checkins[checkins.length - 1].beerType : "light"
-        }
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <AppHeader
+        title="CraftBuddy"
+        isHome
+        onMenuPress={() => navigation.dispatch(DrawerActions.openDrawer())}
       />
-      <Companion state={state} />
-      <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
-      <Text style={styles.muted}>
-        Чекинов: {checkins.length} · XP: {xp} · Ур.{" "}
-        {Math.floor(xp / LEVEL_XP) + 1}
-      </Text>
-
-      {checkins.length > 0 && (
-        <View style={styles.statsRow}>
-          <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
-          <Text style={styles.statItem}>🍺 {stats.favoriteStyle}</Text>
-          <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
-        </View>
-      )}
-
-      <BacChart checkins={checkins} profile={profile} now={now} />
-
-      <View style={styles.actions}>
-        <Link href="/achievements" asChild>
-          <Pressable style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnText}>🏆 Достижения</Text>
-          </Pressable>
-        </Link>
-        <Link href="/history" asChild>
-          <Pressable style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnText}>
-              📋 История ({checkins.length})
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: insets.bottom + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <BeerGlass fillLevel={fillLevel} size={130} beerType={lastType} />
+        <Companion state={state} />
+        <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
+        <Text style={styles.muted}>
+          Чекинов: {checkins.length} · XP: {xp} · Ур.{" "}
+          {Math.floor(xp / LEVEL_XP) + 1}
+        </Text>
+        {checkins.length > 0 && (
+          <View style={styles.statsRow}>
+            <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
+            <Text style={styles.statItem}>🍺 {stats.favoriteStyle}</Text>
+            <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
+          </View>
+        )}
+        <BacChart checkins={checkins} profile={profile} now={now} />
+        {isHardBlocked ? (
+          <View style={styles.blocked}>
+            <Text style={styles.blockedTitle}>Критический уровень</Text>
+            <Text style={styles.blockedText}>
+              BAC слишком высок. Виртуальная вода не поможет. Пожалуйста,
+              подождите, пока алкоголь выветрится.
             </Text>
-          </Pressable>
-        </Link>
-        <Link href="/settings" asChild>
-          <Pressable style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnText}>⚙️ Настройки</Text>
-          </Pressable>
-        </Link>
-        <Link href="/scanner" asChild>
-          <Pressable style={styles.secondaryBtn}>
-            <Text style={styles.secondaryBtnText}>📷 Сканировать</Text>
-          </Pressable>
-        </Link>
-      </View>
-
-      {isHardBlocked ? (
-        <View style={styles.blocked}>
-          <Text style={styles.blockedTitle}>⛔ Критический уровень</Text>
-          <Text style={styles.blockedText}>
-            BAC слишком высок. Виртуальная вода не поможет. Пожалуйста,
-            подождите, пока алкоголь выветрится.
-          </Text>
-          <Text style={styles.hardBlockHint}>
-            Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки: 1.5)
-          </Text>
-        </View>
-      ) : blocked ? (
-        <View style={styles.blocked}>
-          <Text style={styles.blockedTitle}>Лимит превышен</Text>
-          <Text style={styles.blockedText}>
-            Добавление пива заблокировано. Выпейте стакан воды, чтобы получить
-            временный доступ.
-          </Text>
-          <Pressable
-            style={styles.waterBtn}
-            onPress={() => {
-              drinkWater();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              Alert.alert(
-                "💧",
-                `Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
-              );
-              if (Platform.OS === "web") {
-                window.alert(
-                  `💧 Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
-                );
-              } else {
-                Alert.alert(
-                  "💧",
-                  `Блокировка временно снята на ${WATER_UNLOCK_MIN} минут`,
-                );
-              }
-            }}
-          >
-            <Text style={styles.waterText}>💧 Выпить воды</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Link href="/checkin" asChild>
-          <Pressable style={styles.button}>
-            <Text style={styles.buttonText}>+ Добавить пиво</Text>
-          </Pressable>
-        </Link>
-      )}
-
-      {waterActive && (
-        <Text style={styles.hint}>Вода действует ещё несколько минут</Text>
-      )}
-    </ScrollView>
+            <Text style={styles.hardBlockHint}>
+              Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки: 1.5)
+            </Text>
+          </View>
+        ) : blocked ? (
+          <View style={styles.blocked}>
+            <Text style={styles.blockedTitle}>Лимит превышен</Text>
+            <Text style={styles.blockedText}>
+              Добавление пива заблокировано. Выпейте стакан воды, чтобы получить
+              временный доступ.
+            </Text>
+            <Pressable
+              style={styles.waterBtn}
+              onPress={() => {
+                drinkWater();
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (Platform.OS === "web") {
+                  window.alert(`Блокировка снята на ${WATER_UNLOCK_MIN} минут`);
+                } else {
+                  Alert.alert(
+                    "Блокировка снята",
+                    `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
+                  );
+                }
+              }}
+            >
+              <Text style={styles.waterText}>Выпить воды</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.primaryActions}>
+            <Link href="/checkin" asChild>
+              <Pressable style={styles.bigBtn}>
+                <Text style={styles.bigBtnIcon}>+</Text>
+                <Text style={styles.bigBtnText}>Добавить пиво</Text>
+              </Pressable>
+            </Link>
+            <Link href="/scanner" asChild>
+              <Pressable style={styles.scanBtn}>
+                <QrIcon color={colors.textPrimary} size={42} />
+              </Pressable>
+            </Link>
+          </View>
+        )}
+        {waterActive && (
+          <Text style={styles.hint}>Вода действует ещё несколько минут</Text>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: "center",
     alignItems: "center",
-    padding: 24,
-    backgroundColor: colors.bg,
+    paddingHorizontal: 24,
+    paddingTop: 16,
   },
   bac: {
     fontSize: 36,
@@ -210,39 +187,46 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   statItem: { fontSize: 12, color: colors.textPrimary, fontWeight: "600" },
-  actions: {
+  primaryActions: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-    flexWrap: "wrap",
-    justifyContent: "center",
-  },
-  secondaryBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: colors.primarySoft,
-  },
-  secondaryBtnText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  button: {
+    gap: 12,
     marginTop: 16,
+    alignItems: "center",
+  },
+  bigBtn: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: colors.primary,
+    gap: 8,
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  bigBtnIcon: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  bigBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  scanBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.borderWarm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   blocked: {
-    marginTop: 16,
     padding: 20,
     borderRadius: 16,
     backgroundColor: colors.dangerSoft,
     alignItems: "center",
-    maxWidth: 320,
   },
   blockedTitle: {
     fontSize: 18,

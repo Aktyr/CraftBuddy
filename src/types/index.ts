@@ -16,8 +16,10 @@ export interface Checkin {
   glassType: string;
   beerType: BeerType;
   tasteTags: string[];
-  isNew: boolean; // был ли сорт уникальным на момент чекина
+  isNew: boolean;
   timestamp: number;
+  /** Штрихкод, если чек-ин создан через сканер */
+  scannedBarcode?: string;
 }
 
 export type AchievementId =
@@ -34,4 +36,5 @@ export interface Achievement {
   emoji: string;
 }
 
+// Важно: "grouped" убран из типа, так как это отдельный тумблер
 export type SortMode = "fresh" | "old" | "rating" | "abv";

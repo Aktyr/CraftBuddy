@@ -25,41 +25,44 @@ describe("calculateBac", () => {
     expect(calculateBac([], profile)).toBe(0);
   });
 
-  it("увеличивается после чекина", () => {
+  it("растёт в фазе всасывания", () => {
     const now = Date.now();
-    const checkins = [makeCheckin(500, 5, 0)];
-    const bac = calculateBac(checkins, profile, now);
-    expect(bac).toBeGreaterThan(0);
+    const start = calculateBac([makeCheckin(500, 5, 0)], profile, now);
+    const mid = calculateBac([makeCheckin(500, 5, 22)], profile, now);
+    expect(mid).toBeGreaterThan(start);
   });
 
-  it("падает со временем", () => {
+  it("падает после пика всасывания", () => {
     const now = Date.now();
-    const fresh = calculateBac([makeCheckin(500, 5, 0)], profile, now);
-    const old = calculateBac([makeCheckin(500, 5, 120)], profile, now);
-    expect(old).toBeLessThan(fresh);
+    const peak = calculateBac([makeCheckin(500, 5, 45)], profile, now);
+    const later = calculateBac([makeCheckin(500, 5, 120)], profile, now);
+    expect(later).toBeLessThan(peak);
   });
+
   it("полностью выветривается", () => {
     expect(calculateBac([makeCheckin(500, 5, 2000)], profile)).toBe(0);
   });
 
   it("женский BAC выше при тех же параметрах", () => {
     const female: UserProfile = { weightKg: 70, gender: "female" };
-    const checkins = [makeCheckin(500, 5, 0)];
     const now = Date.now();
-    const maleBac = calculateBac(checkins, profile, now);
-    const femaleBac = calculateBac(checkins, female, now);
+    const maleBac = calculateBac([makeCheckin(500, 5, 60)], profile, now);
+    const femaleBac = calculateBac([makeCheckin(500, 5, 60)], female, now);
     expect(femaleBac).toBeGreaterThan(maleBac);
   });
 
   it("суммируется от нескольких чекинов", () => {
-    const checkins = [makeCheckin(500, 5, 0), makeCheckin(500, 5, 0)];
-    const single = calculateBac([checkins[0]], profile);
-    const total = calculateBac(checkins, profile);
-    expect(total).toBeGreaterThan(single);
+    const now = Date.now();
+    const single = calculateBac([makeCheckin(500, 5, 60)], profile, now);
+    const double = calculateBac(
+      [makeCheckin(500, 5, 60), makeCheckin(500, 5, 60)],
+      profile,
+      now,
+    );
+    expect(double).toBeGreaterThan(single);
   });
 
   it("не уходит в минус", () => {
-    const checkins = [makeCheckin(100, 4, 10_000)];
-    expect(calculateBac(checkins, profile)).toBe(0);
+    expect(calculateBac([makeCheckin(100, 4, 10_000)], profile)).toBe(0);
   });
 });

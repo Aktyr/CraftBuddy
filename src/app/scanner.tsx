@@ -4,16 +4,26 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { findBeerByBarcode } from "../lib/beers";
 import { colors } from "../lib/theme";
+import { useAppStore } from "../store/useAppStore";
+import { Checkin } from "../types";
 
 export default function ScannerScreen() {
+  const checkins = useAppStore((s) => s.checkins);
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+
+  // Сбрасываем scanned при каждом входе на экран
+  useFocusEffect(
+    useCallback(() => {
+      setScanned(false);
+    }, []),
+  );
 
   if (!permission) return <View style={styles.container} />;
 
@@ -38,23 +48,32 @@ export default function ScannerScreen() {
     if (scanned) return;
     setScanned(true);
     const beer = findBeerByBarcode(result.data);
-    if (beer) {
+    const existingCheckin = checkins.find(
+      (c: Checkin) => c.scannedBarcode === result.data,
+    );
+    const params: any = {
+      scannedBarcode: result.data,
+    };
+    if (existingCheckin) {
+      params.scannedName = existingCheckin.beerName;
+      params.scannedAbv = String(existingCheckin.abv);
+      params.scannedType = existingCheckin.beerType;
+      params.scannedVolume = String(existingCheckin.volumeMl);
+      params.scannedGlass = existingCheckin.glassType;
+      params.scannedTasteTags = JSON.stringify(existingCheckin.tasteTags);
+    } else if (beer) {
+      params.scannedName = beer.name;
+      params.scannedAbv = String(beer.abv);
+      params.scannedType = beer.type;
+    }
+    if (beer || existingCheckin) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace({
-        pathname: "/checkin",
-        params: {
-          scannedName: beer.name,
-          scannedAbv: String(beer.abv),
-          scannedType: beer.type,
-        },
-      });
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      router.replace({
-        pathname: "/checkin",
-        params: { scannedBarcode: result.data },
-      });
     }
+    // Уникальный ключ заставляет React пересоздать форму checkin
+    params._scanKey = Date.now().toString();
+    router.replace({ pathname: "/checkin", params });
   };
 
   return (
@@ -63,7 +82,7 @@ export default function ScannerScreen() {
         style={StyleSheet.absoluteFill}
         facing="back"
         barcodeScannerSettings={{
-          barcodeTypes: ["ean13", "ean8", "code128", "qr"],
+          barcodeTypes: ["ean13", "ean8", "code128", "qr", "datamatrix"],
         }}
         onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
       />

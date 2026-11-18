@@ -1,4 +1,5 @@
-import { CompanionState } from "../types";
+import { Checkin, CompanionState, UserProfile } from "../types";
+import { calculatePeakBac } from "./bac";
 import {
   BAC_DRUNK,
   BAC_HAPPY,
@@ -12,20 +13,21 @@ export function getCompanionState(
   justLeveledUp: boolean,
 ): CompanionState {
   if (justLeveledUp) return "levelUp";
-  if (bac > BAC_HARD_LIMIT) return "sleep"; // Спит при критическом уровне
-  if (bac > BAC_LIMIT) return "sleep"; // Спит при обычном превышении
+  if (bac > BAC_HARD_LIMIT) return "sleep";
+  if (bac > BAC_LIMIT) return "sleep";
   if (bac >= BAC_HAPPY) return "happy";
   if (bac > BAC_DRUNK) return "drunk";
   return "idle";
 }
 
-// Теперь функция принимает время и последний приём воды
 export function isCheckinBlocked(
   bac: number,
   lastWaterAt: number,
   now: number = Date.now(),
+  checkins?: Checkin[],
+  profile?: UserProfile,
 ): boolean {
-  // 1. Если превышен жёсткий лимит — блокировка абсолютная, вода не поможет
+  // 1. Если превышен жёсткий лимит — блокировка абсолютная
   if (bac > BAC_HARD_LIMIT) {
     return true;
   }
@@ -35,7 +37,14 @@ export function isCheckinBlocked(
     return true;
   }
 
-  // 3. Во всех остальных случаях (включая мягкий лимит + активная вода) — разрешаем
+  // 3. Превентивная блокировка: если прогноз показывает превышение жёсткого лимита
+  if (checkins && profile) {
+    const peakBac = calculatePeakBac(checkins, profile, now);
+    if (peakBac > BAC_HARD_LIMIT && bac > BAC_LIMIT * 0.7) {
+      return true;
+    }
+  }
+
   return false;
 }
 

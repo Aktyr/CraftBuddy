@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -17,7 +18,6 @@ import { GLASSES } from "../lib/constants";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { BeerType, Checkin } from "../types";
-import * as Haptics from "expo-haptics";
 
 export default function CheckinScreen() {
   const router = useRouter();
@@ -39,17 +39,65 @@ export default function CheckinScreen() {
     scannedAbv?: string;
     scannedBarcode?: string;
     scannedType?: BeerType;
+    scannedVolume?: string;
+    scannedGlass?: string;
+    scannedTasteTags?: string;
+    _scanKey?: string;
   }>();
 
+  // Зависимости перечислены явно, чтобы эффект перезапускался
+  // при повторном сканировании того же штрихкода
   useEffect(() => {
-    if (params.scannedName) setName(params.scannedName);
-    if (params.scannedAbv) setAbv(params.scannedAbv);
-    if (params.scannedType) setBeerType(params.scannedType);
-  }, [params]);
+    // Сбрасываем форму при каждом новом скане
+    if (params.scannedName !== undefined) {
+      setName(params.scannedName);
+    } else {
+      setName("");
+    }
 
+    if (params.scannedAbv !== undefined) {
+      setAbv(params.scannedAbv);
+    } else {
+      setAbv("5");
+    }
+
+    if (params.scannedType !== undefined) {
+      setBeerType(params.scannedType);
+    } else {
+      setBeerType("light");
+    }
+
+    if (params.scannedVolume !== undefined) {
+      setVolume(params.scannedVolume);
+    } else {
+      setVolume("500");
+    }
+
+    if (params.scannedGlass !== undefined) {
+      setGlass(params.scannedGlass);
+    } else {
+      setGlass(GLASSES[0].id);
+    }
+
+    if (params.scannedTasteTags !== undefined) {
+      try {
+        setTasteTags(JSON.parse(params.scannedTasteTags));
+      } catch {
+        setTasteTags([]);
+      }
+    } else {
+      setTasteTags([]);
+    }
+
+    setRating(0);
+  }, [params.scannedBarcode]);
+
+  // Прогнозирующая блокировка: учитываем не только текущий BAC,
+  // но и прогноз на ближайшие 2 часа
   if (profile) {
-    const bac = calculateBac(checkins, profile);
-    if (isCheckinBlocked(bac, lastWaterAt)) {
+    const now = Date.now();
+    const bac = calculateBac(checkins, profile, now);
+    if (isCheckinBlocked(bac, lastWaterAt, now, checkins, profile)) {
       return <Redirect href="/" />;
     }
   }
@@ -87,14 +135,17 @@ export default function CheckinScreen() {
       tasteTags,
       isNew: true,
       timestamp: Date.now(),
+      scannedBarcode: params.scannedBarcode,
     };
     addCheckin(checkin);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };
 
+  // Ключ пересоздаёт форму при каждом новом скане — стейт сбрасывается к дефолту
   return (
     <KeyboardAvoidingView
+      key={(params._scanKey as string) ?? "manual"}
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
@@ -199,6 +250,7 @@ export default function CheckinScreen() {
         >
           <Text style={styles.buttonText}>Сохранить</Text>
         </Pressable>
+
         <Pressable style={styles.cancel} onPress={() => router.back()}>
           <Text style={styles.cancelText}>Отмена</Text>
         </Pressable>

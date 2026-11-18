@@ -1,6 +1,17 @@
-import { Stack, useRouter, useSegments } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
+import { Drawer } from "expo-router/drawer";
 import { useEffect } from "react";
+import { StyleSheet, Text } from "react-native";
+import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
+
+const MENU_ITEMS = [
+  { name: "index", label: "🏠 Главная", href: "/" },
+  { name: "history", label: "📋 История", href: "/history" },
+  { name: "achievements", label: "🏆 Достижения", href: "/achievements" },
+  { name: "settings", label: "⚙️ Настройки", href: "/settings" },
+  { name: "about", label: "ℹ️ О приложении", href: "/about" },
+];
 
 export default function RootLayout() {
   const profile = useAppStore((s) => s.profile);
@@ -14,14 +25,58 @@ export default function RootLayout() {
   }, [profile, segments]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="onboarding" />
-      <Stack.Screen name="index" />
-      <Stack.Screen name="checkin" />
-      <Stack.Screen name="history" />
-      <Stack.Screen name="scanner" />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="achievements" />
-    </Stack>
+    <Drawer
+      screenOptions={{
+        headerShown: false,
+        drawerStyle: { backgroundColor: colors.bg, width: 280 },
+        drawerActiveBackgroundColor: colors.primarySoft,
+        drawerActiveTintColor: colors.textPrimary,
+        drawerInactiveTintColor: colors.textMuted,
+      }}
+    >
+      {MENU_ITEMS.map((item) => (
+        <Drawer.Screen
+          key={item.name}
+          name={item.name}
+          options={{
+            title: item.label,
+            drawerLabel: ({ focused }) => (
+              <Text
+                style={[
+                  styles.drawerLabel,
+                  focused && styles.drawerLabelActive,
+                ]}
+              >
+                {item.label}
+              </Text>
+            ),
+          }}
+        />
+      ))}
+      <Drawer.Screen
+        name="onboarding"
+        options={{ drawerItemStyle: { display: "none" } }}
+      />
+      <Drawer.Screen
+        name="checkin"
+        options={{ drawerItemStyle: { display: "none" } }}
+      />
+      <Drawer.Screen
+        name="scanner"
+        options={{ drawerItemStyle: { display: "none" } }}
+      />
+    </Drawer>
   );
 }
+
+const styles = StyleSheet.create({
+  drawerLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 16,
+  },
+  drawerLabelActive: {
+    color: colors.textPrimary,
+    fontWeight: "700",
+  },
+});

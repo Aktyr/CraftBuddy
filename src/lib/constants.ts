@@ -1,12 +1,14 @@
 export const LEVEL_XP = 50;
 export const WATER_UNLOCK_MIN = 10;
-export const BAC_LIMIT = 0.8; // Мягкий порог блокировки (можно снять водой)
-export const BAC_HARD_LIMIT = 1.5; // Жёсткий порог (вода не поможет, только время)
+export const BAC_LIMIT = 0.8;
+export const BAC_HARD_LIMIT = 1.5;
 export const BAC_HAPPY = 0.3;
 export const BAC_DRUNK = 0.05;
 
 export const XP_NEW_BEER = 15;
 export const XP_DUPLICATE = 5;
+/** Бонусные очки опыта за использование сканера штрихкодов */
+export const XP_SCAN_BONUS = 5;
 
 export const TASTE_TAGS = [
   "Цитрус",
