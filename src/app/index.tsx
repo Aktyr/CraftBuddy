@@ -17,7 +17,8 @@ import BacChart from "../components/BacChart";
 import BeerGlass from "../components/BeerGlass";
 import Companion from "../components/Companion";
 import QrIcon from "../components/icons/QrIcon";
-import { calculateBac } from "../lib/bac";
+import { useActiveCheckins } from "../hooks/useActiveCheckins";
+import { calculateBac, calculatePeakBac } from "../lib/bac";
 import {
   getCompanionState,
   isCheckinBlocked,
@@ -38,7 +39,8 @@ const LEVEL_UP_DISPLAY_MS = 2000;
 export default function Home() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { profile, checkins, xp, lastWaterAt, drinkWater } = useAppStore();
+  const { profile, xp, lastWaterAt, drinkWater } = useAppStore();
+  const activeCheckins = useActiveCheckins();
   const [now, setNow] = useState(Date.now());
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
@@ -64,15 +66,27 @@ export default function Home() {
 
   if (!profile) return null;
 
-  const bac = calculateBac(checkins, profile, now);
+  const bac = calculateBac(activeCheckins, profile, now);
+  const peakBac = calculatePeakBac(activeCheckins, profile, now);
   const state = getCompanionState(bac, justLeveledUp);
   const waterActive = isWaterActive(lastWaterAt, now);
-  const blocked = isCheckinBlocked(bac, lastWaterAt, now, checkins, profile);
+  const blocked = isCheckinBlocked(
+    bac,
+    lastWaterAt,
+    now,
+    activeCheckins,
+    profile,
+  );
   const isHardBlocked = bac > BAC_HARD_LIMIT;
-  const fillLevel = Math.min(1, bac / BAC_LIMIT);
-  const stats = useMemo(() => computeStats(checkins), [checkins]);
+
+  // Стакан заполняется до прогнозируемого пика сразу при чекине
+  const fillLevel = Math.min(1, peakBac / BAC_LIMIT);
+
+  const stats = useMemo(() => computeStats(activeCheckins), [activeCheckins]);
   const lastType =
-    checkins.length > 0 ? checkins[checkins.length - 1].beerType : "light";
+    activeCheckins.length > 0
+      ? activeCheckins[activeCheckins.length - 1].beerType
+      : "light";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -90,19 +104,23 @@ export default function Home() {
       >
         <BeerGlass fillLevel={fillLevel} size={130} beerType={lastType} />
         <Companion state={state} />
+
         <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
         <Text style={styles.muted}>
-          Чекинов: {checkins.length} · XP: {xp} · Ур.{" "}
+          Чекинов: {activeCheckins.length} · XP: {xp} · Ур.{" "}
           {Math.floor(xp / LEVEL_XP) + 1}
         </Text>
-        {checkins.length > 0 && (
+
+        {activeCheckins.length > 0 ? (
           <View style={styles.statsRow}>
             <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
             <Text style={styles.statItem}>🍺 {stats.favoriteStyle}</Text>
             <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
           </View>
-        )}
-        <BacChart checkins={checkins} profile={profile} now={now} />
+        ) : null}
+
+        <BacChart checkins={activeCheckins} profile={profile} now={now} />
+
         {isHardBlocked ? (
           <View style={styles.blocked}>
             <Text style={styles.blockedTitle}>Критический уровень</Text>
@@ -149,14 +167,15 @@ export default function Home() {
             </Link>
             <Link href="/scanner" asChild>
               <Pressable style={styles.scanBtn}>
-                <QrIcon color={colors.textPrimary} size={42} />
+                <QrIcon color={colors.textPrimary} size={32} />
               </Pressable>
             </Link>
           </View>
         )}
-        {waterActive && (
+
+        {waterActive ? (
           <Text style={styles.hint}>Вода действует ещё несколько минут</Text>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -202,16 +221,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     gap: 8,
   },
-  bigBtnIcon: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  bigBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  bigBtnIcon: { color: "#fff", fontSize: 20, fontWeight: "700" },
+  bigBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   scanBtn: {
     width: 52,
     height: 52,
@@ -223,10 +234,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   blocked: {
+    marginTop: 16,
     padding: 20,
     borderRadius: 16,
     backgroundColor: colors.dangerSoft,
     alignItems: "center",
+    width: "100%",
   },
   blockedTitle: {
     fontSize: 18,

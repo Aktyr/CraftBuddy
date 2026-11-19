@@ -46,7 +46,7 @@ export function calculateBac(
 }
 /**
  * Рассчитывает прогнозируемый пик BAC в ближайшие 2 часа.
- * Используется для превентивной блокировки.
+ * Используется для мгновенного заполнения стакана при чекине.
  */
 export function calculatePeakBac(
   checkins: Checkin[],

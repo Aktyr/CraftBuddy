@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import TasteChips from "../components/TasteChips";
 import { calculateBac } from "../lib/bac";
+import { getBeerAccent } from "../lib/beerColor";
 import { isCheckinBlocked } from "../lib/companion";
 import { GLASSES } from "../lib/constants";
 import { colors } from "../lib/theme";
@@ -24,6 +25,7 @@ export default function CheckinScreen() {
   const profile = useAppStore((s) => s.profile);
   const checkins = useAppStore((s) => s.checkins);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
+  const lastBacReset = useAppStore((s) => s.lastBacReset);
   const addCheckin = useAppStore((s) => s.addCheckin);
 
   const [name, setName] = useState("");
@@ -45,39 +47,21 @@ export default function CheckinScreen() {
     _scanKey?: string;
   }>();
 
-  // Зависимости перечислены явно, чтобы эффект перезапускался
-  // при повторном сканировании того же штрихкода
   useEffect(() => {
-    // Сбрасываем форму при каждом новом скане
-    if (params.scannedName !== undefined) {
-      setName(params.scannedName);
-    } else {
-      setName("");
-    }
+    if (params.scannedName !== undefined) setName(params.scannedName);
+    else setName("");
 
-    if (params.scannedAbv !== undefined) {
-      setAbv(params.scannedAbv);
-    } else {
-      setAbv("5");
-    }
+    if (params.scannedAbv !== undefined) setAbv(params.scannedAbv);
+    else setAbv("5");
 
-    if (params.scannedType !== undefined) {
-      setBeerType(params.scannedType);
-    } else {
-      setBeerType("light");
-    }
+    if (params.scannedType !== undefined) setBeerType(params.scannedType);
+    else setBeerType("light");
 
-    if (params.scannedVolume !== undefined) {
-      setVolume(params.scannedVolume);
-    } else {
-      setVolume("500");
-    }
+    if (params.scannedVolume !== undefined) setVolume(params.scannedVolume);
+    else setVolume("500");
 
-    if (params.scannedGlass !== undefined) {
-      setGlass(params.scannedGlass);
-    } else {
-      setGlass(GLASSES[0].id);
-    }
+    if (params.scannedGlass !== undefined) setGlass(params.scannedGlass);
+    else setGlass(GLASSES[0].id);
 
     if (params.scannedTasteTags !== undefined) {
       try {
@@ -92,12 +76,19 @@ export default function CheckinScreen() {
     setRating(0);
   }, [params.scannedBarcode]);
 
-  // Прогнозирующая блокировка: учитываем не только текущий BAC,
-  // но и прогноз на ближайшие 2 часа
+  // Фильтруем чекины по lastBacReset
+  const activeCheckins = useMemo(
+    () =>
+      lastBacReset
+        ? checkins.filter((c) => c.timestamp >= lastBacReset)
+        : checkins,
+    [checkins, lastBacReset],
+  );
+
   if (profile) {
     const now = Date.now();
-    const bac = calculateBac(checkins, profile, now);
-    if (isCheckinBlocked(bac, lastWaterAt, now, checkins, profile)) {
+    const bac = calculateBac(activeCheckins, profile, now);
+    if (isCheckinBlocked(bac, lastWaterAt, now, activeCheckins, profile)) {
       return <Redirect href="/" />;
     }
   }
@@ -142,7 +133,6 @@ export default function CheckinScreen() {
     router.back();
   };
 
-  // Ключ пересоздаёт форму при каждом новом скане — стейт сбрасывается к дефолту
   return (
     <KeyboardAvoidingView
       key={(params._scanKey as string) ?? "manual"}
@@ -197,6 +187,9 @@ export default function CheckinScreen() {
               style={[styles.chip, beerType === t && styles.chipActive]}
               onPress={() => setBeerType(t)}
             >
+              <View
+                style={[styles.colorDot, { backgroundColor: getBeerAccent(t) }]}
+              />
               <Text
                 style={[
                   styles.chipText,
@@ -288,18 +281,26 @@ const styles = StyleSheet.create({
   star: { fontSize: 36, color: colors.inactive },
   starActive: { color: colors.primary },
   chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    alignItems: "center",
     minWidth: 80,
   },
   chipActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
+  },
+  colorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    marginRight: 6,
   },
   chipText: { fontSize: 12, color: colors.textMuted },
   chipTextActive: { color: colors.textPrimary, fontWeight: "700" },

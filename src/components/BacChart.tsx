@@ -19,13 +19,21 @@ interface Props {
   checkins: Checkin[];
   profile: UserProfile;
   now: number;
+  bacOverride?: number | null;
 }
 
-export default function BacChart({ checkins, profile, now }: Props) {
+export default function BacChart({
+  checkins,
+  profile,
+  now,
+  bacOverride,
+}: Props) {
   const data = useMemo(() => {
-    if (checkins.length === 0) return null;
+    if (!checkins || checkins.length === 0) return null;
 
     const firstTime = Math.min(...checkins.map((c) => c.timestamp));
+    if (isNaN(firstTime)) return null;
+
     const endTime = Math.max(
       now + 4 * 60 * 60 * 1000,
       firstTime + 60 * 60 * 1000,
@@ -34,17 +42,23 @@ export default function BacChart({ checkins, profile, now }: Props) {
 
     const samples: { t: number; v: number }[] = [];
     for (let t = firstTime; t <= endTime; t += step) {
-      samples.push({ t, v: calculateBac(checkins, profile, t) });
+      const bac =
+        bacOverride !== null && bacOverride !== undefined
+          ? bacOverride
+          : calculateBac(checkins, profile, t);
+      samples.push({ t, v: bac });
     }
+
+    if (samples.length === 0) return null;
 
     const maxBac = Math.max(BAC_LIMIT * 1.3, ...samples.map((s) => s.v));
     const chartW = WIDTH - PADDING * 2;
     const chartH = HEIGHT - PADDING * 2;
     const timeRange = endTime - firstTime;
+
     const toX = (t: number) => PADDING + ((t - firstTime) / timeRange) * chartW;
     const toY = (v: number) => PADDING + chartH - (v / maxBac) * chartH;
 
-    // Кубические кривые Безье для плавной линии
     let pathData = `M ${toX(samples[0].t)},${toY(samples[0].v)}`;
     for (let i = 1; i < samples.length; i++) {
       const prevX = toX(samples[i - 1].t);
@@ -52,14 +66,14 @@ export default function BacChart({ checkins, profile, now }: Props) {
       const currX = toX(samples[i].t);
       const currY = toY(samples[i].v);
       const tension = 0.3;
-      pathData += ` C ${prevX + (currX - prevX) * tension},${
-        prevY + (currY - prevY) * tension
-      } ${prevX + (currX - prevX) * (1 - tension)},${
-        prevY + (currY - prevY) * (1 - tension)
-      } ${currX},${currY}`;
+      pathData += ` C ${prevX + (currX - prevX) * tension},${prevY + (currY - prevY) * tension} ${prevX + (currX - prevX) * (1 - tension)},${prevY + (currY - prevY) * (1 - tension)} ${currX},${currY}`;
     }
 
-    const currentBac = calculateBac(checkins, profile, now);
+    const currentBac =
+      bacOverride !== null && bacOverride !== undefined
+        ? bacOverride
+        : calculateBac(checkins, profile, now);
+
     return {
       pathData,
       currentPoint: { x: toX(now), y: toY(currentBac) },
@@ -68,7 +82,7 @@ export default function BacChart({ checkins, profile, now }: Props) {
       toY,
       maxBac,
     };
-  }, [checkins, profile, now]);
+  }, [checkins, profile, now, bacOverride]);
 
   if (!data) return null;
 
@@ -76,7 +90,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.title}>Динамика опьянения (BAC)</Text>
       <Svg width={WIDTH} height={HEIGHT}>
-        {/* Безопасная зона ниже лимита */}
         <Rect
           x={PADDING}
           y={data.toY(BAC_LIMIT)}
@@ -85,7 +98,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
           fill="#ECFDF5"
           opacity={0.4}
         />
-        {/* Зона превышения выше лимита */}
         <Rect
           x={PADDING}
           y={PADDING}
@@ -94,7 +106,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
           fill="#FEE2E2"
           opacity={0.4}
         />
-
         <Line
           x1={PADDING}
           y1={PADDING}
@@ -109,7 +120,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
           y2={HEIGHT - PADDING}
           stroke="#E5E7EB"
         />
-
         <SvgText
           x={PADDING - 5}
           y={PADDING + 4}
@@ -128,7 +138,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
         >
           0
         </SvgText>
-
         <Line
           x1={PADDING}
           y1={data.limitY}
@@ -147,7 +156,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
         >
           {BAC_LIMIT}
         </SvgText>
-
         <Path
           d={data.pathData}
           fill="none"
@@ -156,8 +164,6 @@ export default function BacChart({ checkins, profile, now }: Props) {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-
-        {/* Точка "Сейчас" — статичная, обновляется через now */}
         <Circle
           cx={data.currentPoint.x}
           cy={data.currentPoint.y}
@@ -187,12 +193,7 @@ export default function BacChart({ checkins, profile, now }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { marginTop: 16, alignItems: "center" },
-  title: {
-    fontSize: 14,
-    color: "#78350F",
-    marginBottom: 8,
-    fontWeight: "700",
-  },
+  title: { fontSize: 14, color: "#78350F", marginBottom: 8, fontWeight: "700" },
   legend: { flexDirection: "row", gap: 16, marginTop: 8 },
   legendItem: { fontSize: 11, color: "#92400E" },
 });

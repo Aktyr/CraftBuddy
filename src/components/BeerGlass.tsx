@@ -1,99 +1,88 @@
 import { useEffect } from "react";
 import Animated, {
+  cancelAnimation,
+  Easing,
   useAnimatedProps,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import Svg, {
-  ClipPath,
-  Defs,
-  LinearGradient,
-  Path,
-  Rect,
-  Stop,
-} from "react-native-svg";
+import Svg, { ClipPath, Defs, Path, Rect } from "react-native-svg";
+import { getBeerAccent } from "../lib/beerColor";
 import { BeerType } from "../types";
 
-// Создаём анимируемый компонент Rect через Reanimated
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
-const VB_W = 120;
-const VB_H = 200;
-const GLASS_TOP = 20;
-const GLASS_BOTTOM = 185;
-const GLASS_H = GLASS_BOTTOM - GLASS_TOP;
-const GLASS_PATH = `M20,${GLASS_TOP} L100,${GLASS_TOP} L90,${GLASS_BOTTOM} Q60,${GLASS_BOTTOM + 8} 30,${GLASS_BOTTOM} Z`;
-
 interface Props {
-  fillLevel: number;
+  fillLevel: number; // 0-1, относительно прогнозируемого пика BAC
   size?: number;
   beerType?: BeerType;
 }
 
 export default function BeerGlass({
   fillLevel,
-  size = 140,
+  size = 130,
   beerType = "light",
 }: Props) {
-  const progress = useSharedValue(0);
-  const height = size * (VB_H / VB_W);
-
-  // Палитра цветов для разных сортов
-  const colors: Record<BeerType, { top: string; bottom: string }> = {
-    light: { top: "#FCD34D", bottom: "#F59E0B" },
-    wheat: { top: "#FEF3C7", bottom: "#FCD34D" },
-    ipa: { top: "#F59E0B", bottom: "#D97706" },
-    dark: { top: "#78350F", bottom: "#3F2410" },
-    stout: { top: "#3F2410", bottom: "#1C1108" },
-  };
-
-  const palette = colors[beerType] || colors.light;
+  const animatedHeight = useSharedValue(0);
+  const animatedY = useSharedValue(130);
 
   useEffect(() => {
-    // Плавная анимация значения от 0 до 1
-    progress.value = withTiming(Math.max(0, Math.min(1, fillLevel)), {
-      duration: 700,
+    const targetHeight = fillLevel * 120;
+    const targetY = 130 - targetHeight;
+
+    // Прерываем предыдущую анимацию перед запуском новой
+    cancelAnimation(animatedHeight);
+    cancelAnimation(animatedY);
+
+    animatedHeight.value = withTiming(targetHeight, {
+      duration: 1000,
+      easing: Easing.out(Easing.quad),
+    });
+    animatedY.value = withTiming(targetY, {
+      duration: 1000,
+      easing: Easing.out(Easing.quad),
     });
   }, [fillLevel]);
 
-  // useAnimatedProps — правильный способ анимировать SVG в Reanimated
-  const animatedProps = useAnimatedProps(() => {
-    const p = progress.value;
-    return {
-      y: GLASS_BOTTOM - p * GLASS_H,
-      height: p * GLASS_H,
-    } as any; // 'any' нужен, так как типы react-native-svg не знают о Reanimated
-  });
+  const liquidProps = useAnimatedProps(() => ({
+    height: animatedHeight.value,
+    y: animatedY.value,
+  }));
+
+  const color = getBeerAccent(beerType);
 
   return (
-    <Svg width={size} height={height} viewBox={`0 0 ${VB_W} ${VB_H}`}>
+    <Svg width={size} height={size * 1.4} viewBox="0 0 100 140">
       <Defs>
-        <LinearGradient id={`beer-${beerType}`} x1="0" y1="1" x2="0" y2="0">
-          <Stop offset="0" stopColor={palette.bottom} />
-          <Stop offset="1" stopColor={palette.top} />
-        </LinearGradient>
-        <ClipPath id="glassClip">
-          <Path d={GLASS_PATH} />
+        <ClipPath id="glass-clip">
+          <Path d="M 20 10 L 80 10 L 70 130 L 30 130 Z" />
         </ClipPath>
       </Defs>
 
-      {/* Жидкость с анимированными пропсами */}
+      {/* Жидкость с анимацией заполнения */}
       <AnimatedRect
-        animatedProps={animatedProps}
-        width={VB_W}
-        fill={`url(#beer-${beerType})`}
-        clipPath="url(#glassClip)"
+        x="10"
+        width="80"
+        fill={color}
+        clipPath="url(#glass-clip)"
+        animatedProps={liquidProps}
       />
 
       {/* Контур бокала */}
-      <Path d={GLASS_PATH} fill="none" stroke="#78350F" strokeWidth={3} />
-
-      {/* Блик */}
       <Path
-        d={`M34,${GLASS_TOP + 10} L38,${GLASS_BOTTOM - 20}`}
-        stroke="#fff"
-        strokeOpacity={0.35}
-        strokeWidth={4}
+        d="M 20 10 L 80 10 L 70 130 L 30 130 Z"
+        fill="none"
+        stroke="#78350F"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      {/* Блик на бокале */}
+      <Path
+        d="M 25 20 L 35 120"
+        fill="none"
+        stroke="#FFFFFF"
+        strokeWidth="2"
+        opacity="0.4"
         strokeLinecap="round"
       />
     </Svg>

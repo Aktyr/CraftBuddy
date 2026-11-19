@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import AppHeader from "../components/AppHeader";
 import SortChips from "../components/SortChips";
+import { useActiveCheckins } from "../hooks/useActiveCheckins";
 import { calculateBac } from "../lib/bac";
 import { getBeerAccent } from "../lib/beerColor";
 import { isCheckinBlocked } from "../lib/companion";
@@ -29,10 +30,12 @@ export default function HistoryScreen() {
   const checkins = useAppStore((s) => s.checkins);
   const profile = useAppStore((s) => s.profile);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
+  const activeCheckins = useActiveCheckins();
   const [sort, setSort] = useState<SortMode>("fresh");
   const [grouped, setGrouped] = useState(false);
 
   const stats = useMemo(() => computeStats(checkins), [checkins]);
+
   const sorted = useMemo(() => {
     const arr = [...checkins];
     switch (sort) {
@@ -86,44 +89,34 @@ export default function HistoryScreen() {
 
   if (!profile) return null;
 
-  const bac = calculateBac(checkins, profile);
-  const blocked = isCheckinBlocked(bac, lastWaterAt);
+  // BAC и блокировка — от АКТИВНЫХ чекинов (учитывают дебаг-сброс)
+  const bac = calculateBac(activeCheckins, profile);
+  const blocked = isCheckinBlocked(
+    bac,
+    lastWaterAt,
+    Date.now(),
+    activeCheckins,
+    profile,
+  );
 
   const repeatCheckin = (c: Checkin | GroupedCheckin) => {
-    if (blocked) {
-      router.push("/");
-      return;
-    }
+    if (blocked) return;
     const isGrouped = "totalCount" in c;
-
     const params: any = {
       scannedName: c.beerName,
       scannedType: c.beerType,
       scannedBarcode: c.scannedBarcode,
+      _scanKey: `repeat-${Date.now()}`,
     };
-
-    if (!isGrouped && "abv" in c) {
+    if (!isGrouped) {
       params.scannedAbv = String((c as Checkin).abv);
-    }
-
-    if (isGrouped) {
-      params.scannedVolume = String((c as GroupedCheckin).totalVolumeMl);
-    } else if ("volumeMl" in c) {
       params.scannedVolume = String((c as Checkin).volumeMl);
-    }
-
-    if (!isGrouped && "glassType" in c) {
       params.scannedGlass = (c as Checkin).glassType;
-    }
-
-    if (!isGrouped && "tasteTags" in c) {
       params.scannedTasteTags = JSON.stringify((c as Checkin).tasteTags);
+    } else {
+      params.scannedVolume = String((c as GroupedCheckin).totalVolumeMl);
     }
-
-    router.push({
-      pathname: "/checkin",
-      params,
-    });
+    router.push({ pathname: "/checkin", params });
   };
 
   const glassLabel = (id: string) =>
@@ -185,7 +178,7 @@ export default function HistoryScreen() {
                 : formatHumanDate((item as Checkin).timestamp)}
             </Text>
             {!blocked && (
-              <Pressable onPress={() => repeatCheckin(item)}>
+              <Pressable onPress={() => repeatCheckin(item)} hitSlop={8}>
                 <Text style={styles.repeat}>↻ Повторить</Text>
               </Pressable>
             )}
@@ -285,9 +278,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#fff",
   },
-  toggleThumbActive: {
-    marginLeft: 20,
-  },
+  toggleThumbActive: { marginLeft: 20 },
   list: { paddingBottom: 24 },
   card: {
     flexDirection: "row",

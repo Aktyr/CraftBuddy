@@ -11,6 +11,7 @@ const MENU_ITEMS = [
   { name: "achievements", label: "🏆 Достижения", href: "/achievements" },
   { name: "settings", label: "⚙️ Настройки", href: "/settings" },
   { name: "about", label: "ℹ️ О приложении", href: "/about" },
+  { name: "debug", label: "🐛 Debug", href: "/debug" },
 ];
 
 export default function RootLayout() {
@@ -53,6 +54,7 @@ export default function RootLayout() {
           }}
         />
       ))}
+      {/* Только скрытые экраны — их не должно быть в MENU_ITEMS */}
       <Drawer.Screen
         name="onboarding"
         options={{ drawerItemStyle: { display: "none" } }}
@@ -70,13 +72,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  drawerLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 16,
-  },
-  drawerLabelActive: {
-    color: colors.textPrimary,
-    fontWeight: "700",
-  },
+  drawerLabel: { fontSize: 16, fontWeight: "600", marginLeft: 16 },
+  drawerLabelActive: { color: colors.textPrimary, fontWeight: "700" },
 });
