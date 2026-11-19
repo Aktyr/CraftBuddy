@@ -1,6 +1,6 @@
 import { DrawerActions } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { Link, useNavigation } from "expo-router";
+import { Link, useFocusEffect, useNavigation } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -20,8 +20,8 @@ import QrIcon from "../components/icons/QrIcon";
 import { useActiveCheckins } from "../hooks/useActiveCheckins";
 import { calculateBac, calculatePeakBac } from "../lib/bac";
 import {
+  getCheckinBlockReason,
   getCompanionState,
-  isCheckinBlocked,
   isWaterActive,
 } from "../lib/companion";
 import {
@@ -45,10 +45,16 @@ export default function Home() {
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 5_000);
-    return () => clearInterval(t);
-  }, []);
+  // Таймер обновляет now только пока экран в фокусе
+  useFocusEffect(
+    useMemo(
+      () => () => {
+        const t = setInterval(() => setNow(Date.now()), 5_000);
+        return () => clearInterval(t);
+      },
+      [],
+    ),
+  );
 
   useEffect(() => {
     const currentLevel = Math.floor(xp / LEVEL_XP);
@@ -64,25 +70,24 @@ export default function Home() {
     }
   }, [xp]);
 
+  // useMemo ДО early return — иначе ломается правило хуков React
+  const stats = useMemo(() => computeStats(activeCheckins), [activeCheckins]);
+
   if (!profile) return null;
 
   const bac = calculateBac(activeCheckins, profile, now);
   const peakBac = calculatePeakBac(activeCheckins, profile, now);
   const state = getCompanionState(bac, justLeveledUp);
   const waterActive = isWaterActive(lastWaterAt, now);
-  const blocked = isCheckinBlocked(
+  const blockReason = getCheckinBlockReason(
     bac,
     lastWaterAt,
     now,
     activeCheckins,
     profile,
   );
-  const isHardBlocked = bac > BAC_HARD_LIMIT;
 
-  // Стакан заполняется до прогнозируемого пика сразу при чекине
   const fillLevel = Math.min(1, peakBac / BAC_LIMIT);
-
-  const stats = useMemo(() => computeStats(activeCheckins), [activeCheckins]);
   const lastType =
     activeCheckins.length > 0
       ? activeCheckins[activeCheckins.length - 1].beerType
@@ -104,13 +109,11 @@ export default function Home() {
       >
         <BeerGlass fillLevel={fillLevel} size={130} beerType={lastType} />
         <Companion state={state} />
-
         <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
         <Text style={styles.muted}>
           Чекинов: {activeCheckins.length} · XP: {xp} · Ур.{" "}
           {Math.floor(xp / LEVEL_XP) + 1}
         </Text>
-
         {activeCheckins.length > 0 ? (
           <View style={styles.statsRow}>
             <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
@@ -118,10 +121,8 @@ export default function Home() {
             <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
           </View>
         ) : null}
-
         <BacChart checkins={activeCheckins} profile={profile} now={now} />
-
-        {isHardBlocked ? (
+        {blockReason === "hard" ? (
           <View style={styles.blocked}>
             <Text style={styles.blockedTitle}>Критический уровень</Text>
             <Text style={styles.blockedText}>
@@ -129,33 +130,43 @@ export default function Home() {
               подождите, пока алкоголь выветрится.
             </Text>
             <Text style={styles.hardBlockHint}>
-              Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки: 1.5)
+              Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки:{" "}
+              {BAC_HARD_LIMIT})
             </Text>
           </View>
-        ) : blocked ? (
+        ) : blockReason !== null ? (
           <View style={styles.blocked}>
-            <Text style={styles.blockedTitle}>Лимит превышен</Text>
-            <Text style={styles.blockedText}>
-              Добавление пива заблокировано. Выпейте стакан воды, чтобы получить
-              временный доступ.
+            <Text style={styles.blockedTitle}>
+              {blockReason === "forecast"
+                ? "Прогноз превышения лимита"
+                : "Лимит превышен"}
             </Text>
-            <Pressable
-              style={styles.waterBtn}
-              onPress={() => {
-                drinkWater();
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                if (Platform.OS === "web") {
-                  window.alert(`Блокировка снята на ${WATER_UNLOCK_MIN} минут`);
-                } else {
-                  Alert.alert(
-                    "Блокировка снята",
-                    `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
-                  );
-                }
-              }}
-            >
-              <Text style={styles.waterText}>Выпить воды</Text>
-            </Pressable>
+            <Text style={styles.blockedText}>
+              {blockReason === "forecast"
+                ? "Прогнозируется опасный уровень опьянения. Подождите, пока алкоголь выветрится."
+                : "Добавление пива заблокировано. Выпейте стакан воды, чтобы получить временный доступ."}
+            </Text>
+            {blockReason === "soft" && (
+              <Pressable
+                style={styles.waterBtn}
+                onPress={() => {
+                  drinkWater();
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  if (Platform.OS === "web") {
+                    window.alert(
+                      `Блокировка снята на ${WATER_UNLOCK_MIN} минут`,
+                    );
+                  } else {
+                    Alert.alert(
+                      "Блокировка снята",
+                      `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.waterText}>Выпить воды</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <View style={styles.primaryActions}>
@@ -172,7 +183,6 @@ export default function Home() {
             </Link>
           </View>
         )}
-
         {waterActive ? (
           <Text style={styles.hint}>Вода действует ещё несколько минут</Text>
         ) : null}

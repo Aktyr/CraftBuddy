@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,29 +13,35 @@ import {
   View,
 } from "react-native";
 import TasteChips from "../components/TasteChips";
+import { useActiveCheckins } from "../hooks/useActiveCheckins";
 import { calculateBac } from "../lib/bac";
 import { getBeerAccent } from "../lib/beerColor";
-import { isCheckinBlocked } from "../lib/companion";
-import { GLASSES } from "../lib/constants";
+import { getCheckinBlockReason } from "../lib/companion";
+import {
+  BEER_TYPES,
+  GLASSES,
+  MAX_ABV_PERCENT,
+  MAX_VOLUME_ML,
+  TYPE_LABELS,
+} from "../lib/constants";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
-import { BeerType, Checkin } from "../types";
+import { BeerType, Checkin, GlassId, TasteTag } from "../types";
 
 export default function CheckinScreen() {
   const router = useRouter();
   const profile = useAppStore((s) => s.profile);
-  const checkins = useAppStore((s) => s.checkins);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
-  const lastBacReset = useAppStore((s) => s.lastBacReset);
   const addCheckin = useAppStore((s) => s.addCheckin);
+  const activeCheckins = useActiveCheckins();
 
   const [name, setName] = useState("");
   const [volume, setVolume] = useState("500");
   const [abv, setAbv] = useState("5");
   const [rating, setRating] = useState(0);
-  const [glass, setGlass] = useState(GLASSES[0].id);
+  const [glass, setGlass] = useState<GlassId>(GLASSES[0].id);
   const [beerType, setBeerType] = useState<BeerType>("light");
-  const [tasteTags, setTasteTags] = useState<string[]>([]);
+  const [tasteTags, setTasteTags] = useState<TasteTag[]>([]);
 
   const params = useLocalSearchParams<{
     scannedName?: string;
@@ -48,24 +55,15 @@ export default function CheckinScreen() {
   }>();
 
   useEffect(() => {
-    if (params.scannedName !== undefined) setName(params.scannedName);
-    else setName("");
+    setName(params.scannedName ?? "");
+    setAbv(params.scannedAbv ?? "5");
+    setBeerType(params.scannedType ?? "light");
+    setVolume(params.scannedVolume ?? "500");
+    setGlass((params.scannedGlass as GlassId) ?? GLASSES[0].id);
 
-    if (params.scannedAbv !== undefined) setAbv(params.scannedAbv);
-    else setAbv("5");
-
-    if (params.scannedType !== undefined) setBeerType(params.scannedType);
-    else setBeerType("light");
-
-    if (params.scannedVolume !== undefined) setVolume(params.scannedVolume);
-    else setVolume("500");
-
-    if (params.scannedGlass !== undefined) setGlass(params.scannedGlass);
-    else setGlass(GLASSES[0].id);
-
-    if (params.scannedTasteTags !== undefined) {
+    if (params.scannedTasteTags) {
       try {
-        setTasteTags(JSON.parse(params.scannedTasteTags));
+        setTasteTags(JSON.parse(params.scannedTasteTags) as TasteTag[]);
       } catch {
         setTasteTags([]);
       }
@@ -74,21 +72,15 @@ export default function CheckinScreen() {
     }
 
     setRating(0);
-  }, [params.scannedBarcode]);
-
-  // Фильтруем чекины по lastBacReset
-  const activeCheckins = useMemo(
-    () =>
-      lastBacReset
-        ? checkins.filter((c) => c.timestamp >= lastBacReset)
-        : checkins,
-    [checkins, lastBacReset],
-  );
+  }, [params._scanKey]);
 
   if (profile) {
     const now = Date.now();
     const bac = calculateBac(activeCheckins, profile, now);
-    if (isCheckinBlocked(bac, lastWaterAt, now, activeCheckins, profile)) {
+    if (
+      getCheckinBlockReason(bac, lastWaterAt, now, activeCheckins, profile) !==
+      null
+    ) {
       return <Redirect href="/" />;
     }
   }
@@ -99,20 +91,11 @@ export default function CheckinScreen() {
     name.trim().length > 0 &&
     !isNaN(volumeNum) &&
     volumeNum > 0 &&
-    volumeNum <= 2000 &&
+    volumeNum <= MAX_VOLUME_ML &&
     !isNaN(abvNum) &&
     abvNum > 0 &&
-    abvNum <= 60 &&
+    abvNum <= MAX_ABV_PERCENT &&
     rating > 0;
-
-  const TYPES: BeerType[] = ["light", "wheat", "ipa", "dark", "stout"];
-  const TYPE_LABELS: Record<BeerType, string> = {
-    light: "Светлое",
-    wheat: "Пшеничное",
-    ipa: "IPA",
-    dark: "Тёмное",
-    stout: "Стаут",
-  };
 
   const onSave = () => {
     const checkin: Checkin = {
@@ -124,18 +107,26 @@ export default function CheckinScreen() {
       glassType: glass,
       beerType,
       tasteTags,
-      isNew: true,
       timestamp: Date.now(),
       scannedBarcode: params.scannedBarcode,
     };
-    addCheckin(checkin);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+
+    const success = addCheckin(checkin);
+
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Добавление заблокировано",
+        "Превышен лимит BAC или сработал превентивный запрет. Выпейте воды или подождите.",
+      );
+    }
   };
 
   return (
     <KeyboardAvoidingView
-      key={(params._scanKey as string) ?? "manual"}
       style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
@@ -181,7 +172,7 @@ export default function CheckinScreen() {
 
         <Text style={styles.label}>Тип пива</Text>
         <View style={styles.row}>
-          {TYPES.map((t) => (
+          {BEER_TYPES.map((t) => (
             <Pressable
               key={t}
               style={[styles.chip, beerType === t && styles.chipActive]}

@@ -2,8 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { calculateBac } from "../lib/bac";
+import { findBeerByBarcode } from "../lib/beers";
+import { getCheckinBlockReason } from "../lib/companion";
 import { XP_DUPLICATE, XP_NEW_BEER, XP_SCAN_BONUS } from "../lib/constants";
-import { AchievementId, Checkin, UserProfile } from "../types";
+import { Checkin, UserProfile } from "../types";
 
 export interface AppState {
   profile: UserProfile | null;
@@ -11,17 +13,15 @@ export interface AppState {
   xp: number;
   lastWaterAt: number;
   waterCount: number;
-  achievements: AchievementId[];
   lastBacReset: number | null;
-  /** Пиковый BAC за текущую сессию. Используется для масштабирования стакана. */
-  peakBac: number;
+  hasHydrated: boolean;
 
   setProfile: (profile: UserProfile) => void;
-  addCheckin: (checkin: Checkin) => void;
+  addCheckin: (checkin: Checkin) => boolean;
   drinkWater: () => void;
   resetAll: () => void;
   resetBac: () => void;
-  addAchievement: (id: AchievementId) => void;
+  setHasHydrated: (v: boolean) => void;
 }
 
 const initialState: Omit<
@@ -31,16 +31,15 @@ const initialState: Omit<
   | "drinkWater"
   | "resetAll"
   | "resetBac"
-  | "addAchievement"
+  | "setHasHydrated"
 > = {
   profile: null,
   checkins: [],
   xp: 0,
   lastWaterAt: 0,
   waterCount: 0,
-  achievements: [],
   lastBacReset: null,
-  peakBac: 0,
+  hasHydrated: false,
 };
 
 export const useAppStore = create<AppState>()(
@@ -49,29 +48,47 @@ export const useAppStore = create<AppState>()(
       ...initialState,
 
       setProfile: (profile) => set({ profile }),
+      setHasHydrated: (v) => set({ hasHydrated: v }),
 
       addCheckin: (checkin) => {
         const state = get();
-        const newCheckins = [...state.checkins, { ...checkin, isNew: true }];
+        if (!state.profile) return false;
+
+        const activeCheckins =
+          state.lastBacReset !== null
+            ? state.checkins.filter((c) => c.timestamp >= state.lastBacReset!)
+            : state.checkins;
+
+        const blockReason = getCheckinBlockReason(
+          calculateBac(activeCheckins, state.profile, checkin.timestamp),
+          state.lastWaterAt,
+          checkin.timestamp,
+          activeCheckins,
+          state.profile,
+        );
+
+        if (blockReason !== null) {
+          return false;
+        }
+
+        const newCheckins = [...state.checkins, checkin];
         const existing = state.checkins.some(
           (c) => c.beerName.toLowerCase() === checkin.beerName.toLowerCase(),
         );
         const baseXp = existing ? XP_DUPLICATE : XP_NEW_BEER;
-        const scanBonus = checkin.scannedBarcode ? XP_SCAN_BONUS : 0;
 
-        // Рассчитываем новый пиковый BAC
-        const profile = state.profile;
-        let newPeakBac = state.peakBac;
-        if (profile) {
-          const currentBac = calculateBac(newCheckins, profile, Date.now());
-          newPeakBac = Math.max(state.peakBac, currentBac);
-        }
+        // Бонус за сканирование начисляется только если штрихкод найден в базе
+        const scanBonus =
+          checkin.scannedBarcode && findBeerByBarcode(checkin.scannedBarcode)
+            ? XP_SCAN_BONUS
+            : 0;
 
         set({
           checkins: newCheckins,
           xp: state.xp + baseXp + scanBonus,
-          peakBac: newPeakBac,
         });
+
+        return true;
       },
 
       drinkWater: () =>
@@ -80,29 +97,25 @@ export const useAppStore = create<AppState>()(
           waterCount: get().waterCount + 1,
         }),
 
-      addAchievement: (id) => {
-        const state = get();
-        if (!state.achievements.includes(id)) {
-          set({ achievements: [...state.achievements, id] });
-        }
-      },
+      resetBac: () => set({ lastBacReset: Date.now() }),
 
-      resetBac: () => set({ lastBacReset: Date.now(), peakBac: 0 }),
-
-      resetAll: () => set(initialState),
+      resetAll: () => set({ ...initialState, hasHydrated: true }),
     }),
     {
       name: "craftbuddy-storage",
       storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => {
+        return (_state, error) => {
+          useAppStore.getState().setHasHydrated(!error);
+        };
+      },
       partialize: (state) => ({
         profile: state.profile,
         checkins: state.checkins,
         xp: state.xp,
         lastWaterAt: state.lastWaterAt,
         waterCount: state.waterCount,
-        achievements: state.achievements,
         lastBacReset: state.lastBacReset,
-        peakBac: state.peakBac,
       }),
     },
   ),

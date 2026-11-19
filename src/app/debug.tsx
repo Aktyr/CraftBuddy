@@ -17,6 +17,22 @@ export default function DebugScreen() {
   const insets = useSafeAreaInsets();
   const { lastBacReset, resetBac, checkins } = useAppStore();
 
+  // Блокируем доступ к функционалу в продакшен-сборках
+  if (!__DEV__) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, padding: 24 }}>
+        <AppHeader title="Debug" />
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text style={[styles.info, { textAlign: "center", marginTop: 32 }]}>
+            Экран отладки доступен только в режиме разработки (__DEV__).
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   const handleReset = () => {
     const doReset = () => {
       resetBac();
@@ -56,8 +72,8 @@ export default function DebugScreen() {
         </Pressable>
 
         <Text style={styles.hint}>
-          История чекинов сохраняется. При перезапуске приложения расчёт BAC
-          восстановится автоматически.
+          Сброс BAC сохраняется после перезапуска приложения. История чекинов
+          при этом не удаляется.
         </Text>
       </ScrollView>
     </View>

@@ -8,7 +8,13 @@ import Svg, {
   Text as SvgText,
 } from "react-native-svg";
 import { calculateBac } from "../lib/bac";
-import { BAC_LIMIT } from "../lib/constants";
+import {
+  BAC_LIMIT,
+  CHART_BASE_STEP_MS,
+  CHART_MAX_POINTS,
+  CHART_WINDOW_BACK_MS,
+  CHART_WINDOW_FORWARD_MS,
+} from "../lib/constants";
 import { Checkin, UserProfile } from "../types";
 
 const WIDTH = 340;
@@ -19,34 +25,34 @@ interface Props {
   checkins: Checkin[];
   profile: UserProfile;
   now: number;
-  bacOverride?: number | null;
 }
 
-export default function BacChart({
-  checkins,
-  profile,
-  now,
-  bacOverride,
-}: Props) {
+export default function BacChart({ checkins, profile, now }: Props) {
   const data = useMemo(() => {
     if (!checkins || checkins.length === 0) return null;
 
-    const firstTime = Math.min(...checkins.map((c) => c.timestamp));
-    if (isNaN(firstTime)) return null;
+    // Ограничиваем окно графика: не раньше 24ч назад, не позже now + 4ч
+    const windowStart = now - CHART_WINDOW_BACK_MS;
+    const windowEnd = now + CHART_WINDOW_FORWARD_MS;
 
-    const endTime = Math.max(
-      now + 4 * 60 * 60 * 1000,
-      firstTime + 60 * 60 * 1000,
-    );
-    const step = 2 * 60 * 1000;
+    const recentCheckins = checkins.filter((c) => c.timestamp >= windowStart);
+    if (recentCheckins.length === 0) return null;
+
+    const firstTime = Math.min(...recentCheckins.map((c) => c.timestamp));
+    const startTime = Math.max(firstTime, windowStart);
+    const endTime = windowEnd;
+
+    // Адаптивный шаг: базовый 2 минуты, но увеличиваем, если точек слишком много
+    const rawStep = CHART_BASE_STEP_MS;
+    const rawPoints = Math.ceil((endTime - startTime) / rawStep);
+    const step =
+      rawPoints > CHART_MAX_POINTS
+        ? (endTime - startTime) / CHART_MAX_POINTS
+        : rawStep;
 
     const samples: { t: number; v: number }[] = [];
-    for (let t = firstTime; t <= endTime; t += step) {
-      const bac =
-        bacOverride !== null && bacOverride !== undefined
-          ? bacOverride
-          : calculateBac(checkins, profile, t);
-      samples.push({ t, v: bac });
+    for (let t = startTime; t <= endTime; t += step) {
+      samples.push({ t, v: calculateBac(recentCheckins, profile, t) });
     }
 
     if (samples.length === 0) return null;
@@ -54,9 +60,9 @@ export default function BacChart({
     const maxBac = Math.max(BAC_LIMIT * 1.3, ...samples.map((s) => s.v));
     const chartW = WIDTH - PADDING * 2;
     const chartH = HEIGHT - PADDING * 2;
-    const timeRange = endTime - firstTime;
+    const timeRange = endTime - startTime;
 
-    const toX = (t: number) => PADDING + ((t - firstTime) / timeRange) * chartW;
+    const toX = (t: number) => PADDING + ((t - startTime) / timeRange) * chartW;
     const toY = (v: number) => PADDING + chartH - (v / maxBac) * chartH;
 
     let pathData = `M ${toX(samples[0].t)},${toY(samples[0].v)}`;
@@ -69,10 +75,7 @@ export default function BacChart({
       pathData += ` C ${prevX + (currX - prevX) * tension},${prevY + (currY - prevY) * tension} ${prevX + (currX - prevX) * (1 - tension)},${prevY + (currY - prevY) * (1 - tension)} ${currX},${currY}`;
     }
 
-    const currentBac =
-      bacOverride !== null && bacOverride !== undefined
-        ? bacOverride
-        : calculateBac(checkins, profile, now);
+    const currentBac = calculateBac(recentCheckins, profile, now);
 
     return {
       pathData,
@@ -82,7 +85,7 @@ export default function BacChart({
       toY,
       maxBac,
     };
-  }, [checkins, profile, now, bacOverride]);
+  }, [checkins, profile, now]);
 
   if (!data) return null;
 

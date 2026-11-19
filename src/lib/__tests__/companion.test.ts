@@ -1,9 +1,12 @@
+import { UserProfile } from "../../types";
 import {
+  getCheckinBlockReason,
   getCompanionState,
-  isCheckinBlocked,
   isWaterActive,
 } from "../companion";
 import { BAC_LIMIT, WATER_UNLOCK_MIN } from "../constants";
+
+const mockProfile: UserProfile = { weightKg: 70, gender: "male" };
 
 describe("getCompanionState", () => {
   it("idle при нулевом BAC", () => {
@@ -23,10 +26,22 @@ describe("getCompanionState", () => {
   });
 });
 
-describe("isCheckinBlocked", () => {
-  it("false ниже лимита", () => expect(isCheckinBlocked(0.5, 0)).toBe(false));
-  it("true выше лимита", () =>
-    expect(isCheckinBlocked(BAC_LIMIT + 0.01, 0)).toBe(true));
+describe("getCheckinBlockReason", () => {
+  const now = Date.now();
+
+  it("null ниже лимита", () => {
+    expect(getCheckinBlockReason(0.5, 0, now, [], mockProfile)).toBe(null);
+  });
+  it("soft выше лимита без воды", () => {
+    expect(
+      getCheckinBlockReason(BAC_LIMIT + 0.01, 0, now, [], mockProfile),
+    ).toBe("soft");
+  });
+  it("null выше лимита с активной водой", () => {
+    expect(
+      getCheckinBlockReason(BAC_LIMIT + 0.01, now - 1000, now, [], mockProfile),
+    ).toBe(null);
+  });
 });
 
 describe("isWaterActive", () => {

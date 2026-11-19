@@ -2,6 +2,21 @@ export type Gender = "male" | "female";
 export type BeerType = "light" | "dark" | "ipa" | "wheat" | "stout";
 export type CompanionState = "idle" | "happy" | "levelUp" | "drunk" | "sleep";
 
+export type GlassId = "tulip" | "pint" | "snifter" | "mug" | "weizen";
+export type TasteTag =
+  | "Цитрус"
+  | "Хвойный"
+  | "Карамель"
+  | "Шоколад"
+  | "Кофе"
+  | "Фруктовый"
+  | "Травянистый"
+  | "Сладкий"
+  | "Горький"
+  | "Кислый"
+  | "Дымный"
+  | "Пряный";
+
 export interface UserProfile {
   weightKg: number;
   gender: Gender;
@@ -13,12 +28,10 @@ export interface Checkin {
   volumeMl: number;
   abv: number;
   rating: number;
-  glassType: string;
+  glassType: GlassId;
   beerType: BeerType;
-  tasteTags: string[];
-  isNew: boolean;
+  tasteTags: TasteTag[];
   timestamp: number;
-  /** Штрихкод, если чек-ин создан через сканер */
   scannedBarcode?: string;
 }
 
@@ -36,5 +49,4 @@ export interface Achievement {
   emoji: string;
 }
 
-// Важно: "grouped" убран из типа, так как это отдельный тумблер
 export type SortMode = "fresh" | "old" | "rating" | "abv";

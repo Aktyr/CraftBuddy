@@ -16,7 +16,6 @@ const makeCheckin = (
   glassType: "pint",
   beerType: "light",
   tasteTags: [],
-  isNew: true,
   timestamp: Date.now() - minutesAgo * 60_000,
 });
 

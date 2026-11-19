@@ -1,14 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { TASTE_TAGS } from "../lib/constants";
 import { colors } from "../lib/theme";
+import { TasteTag } from "../types";
 
 interface Props {
-  selected: string[];
-  onChange: (tags: string[]) => void;
+  selected: TasteTag[];
+  onChange: (tags: TasteTag[]) => void;
 }
 
 export default function TasteChips({ selected, onChange }: Props) {
-  const toggle = (tag: string) => {
+  const toggle = (tag: TasteTag) => {
     onChange(
       selected.includes(tag)
         ? selected.filter((t) => t !== tag)

@@ -10,7 +10,18 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { findBeerByBarcode } from "../lib/beers";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
-import { Checkin } from "../types";
+import { BeerType, Checkin } from "../types";
+
+interface ScannerRouteParams {
+  scannedBarcode: string;
+  scannedName?: string;
+  scannedAbv?: string;
+  scannedType?: BeerType;
+  scannedVolume?: string;
+  scannedGlass?: string;
+  scannedTasteTags?: string;
+  _scanKey: string;
+}
 
 export default function ScannerScreen() {
   const checkins = useAppStore((s) => s.checkins);
@@ -51,8 +62,9 @@ export default function ScannerScreen() {
     const existingCheckin = checkins.find(
       (c: Checkin) => c.scannedBarcode === result.data,
     );
-    const params: any = {
+    const params: Record<string, string | undefined> = {
       scannedBarcode: result.data,
+      _scanKey: Date.now().toString(),
     };
     if (existingCheckin) {
       params.scannedName = existingCheckin.beerName;
@@ -71,8 +83,6 @@ export default function ScannerScreen() {
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
-    // Уникальный ключ заставляет React пересоздать форму checkin
-    params._scanKey = Date.now().toString();
     router.replace({ pathname: "/checkin", params });
   };
 

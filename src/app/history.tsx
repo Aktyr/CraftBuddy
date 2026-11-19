@@ -1,18 +1,29 @@
-import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import AppHeader from "../components/AppHeader";
 import SortChips from "../components/SortChips";
 import { useActiveCheckins } from "../hooks/useActiveCheckins";
 import { calculateBac } from "../lib/bac";
 import { getBeerAccent } from "../lib/beerColor";
-import { isCheckinBlocked } from "../lib/companion";
-import { GLASSES } from "../lib/constants";
+import { getCheckinBlockReason } from "../lib/companion";
+import { GLASSES, TYPE_LABELS } from "../lib/constants";
 import { formatHumanDate } from "../lib/dates";
 import { computeStats } from "../lib/stats";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { BeerType, Checkin, SortMode } from "../types";
+
+interface RepeatRouteParams {
+  scannedName: string;
+  scannedType: BeerType;
+  scannedBarcode?: string;
+  scannedAbv: string;
+  scannedVolume: string;
+  scannedGlass: string;
+  scannedTasteTags: string;
+  _scanKey: string;
+}
 
 interface GroupedCheckin {
   id: string;
@@ -21,8 +32,10 @@ interface GroupedCheckin {
   totalCount: number;
   totalVolumeMl: number;
   avgRating: number;
+  avgAbv: number;
   lastTimestamp: number;
   scannedBarcode?: string;
+  lastCheckin: Checkin;
 }
 
 export default function HistoryScreen() {
@@ -33,6 +46,15 @@ export default function HistoryScreen() {
   const activeCheckins = useActiveCheckins();
   const [sort, setSort] = useState<SortMode>("fresh");
   const [grouped, setGrouped] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  // Таймер только пока экран в фокусе — для актуальности blocked
+  useFocusEffect(
+    useCallback(() => {
+      const t = setInterval(() => setNow(Date.now()), 30_000);
+      return () => clearInterval(t);
+    }, []),
+  );
 
   const stats = useMemo(() => computeStats(checkins), [checkins]);
 
@@ -64,9 +86,13 @@ export default function HistoryScreen() {
         existing.avgRating =
           (existing.avgRating * (existing.totalCount - 1) + c.rating) /
           existing.totalCount;
+        existing.avgAbv =
+          (existing.avgAbv * (existing.totalCount - 1) + c.abv) /
+          existing.totalCount;
         if (c.timestamp > existing.lastTimestamp) {
           existing.lastTimestamp = c.timestamp;
           existing.beerType = c.beerType;
+          existing.lastCheckin = c;
           if (c.scannedBarcode) existing.scannedBarcode = c.scannedBarcode;
         }
       } else {
@@ -77,116 +103,148 @@ export default function HistoryScreen() {
           totalCount: 1,
           totalVolumeMl: c.volumeMl,
           avgRating: c.rating,
+          avgAbv: c.abv,
           lastTimestamp: c.timestamp,
           scannedBarcode: c.scannedBarcode,
+          lastCheckin: c,
         });
       }
     }
-    return Array.from(groupedMap.values()).sort(
-      (a, b) => b.lastTimestamp - a.lastTimestamp,
-    );
+    const groups = Array.from(groupedMap.values());
+    switch (sort) {
+      case "fresh":
+        groups.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
+        break;
+      case "old":
+        groups.sort((a, b) => a.lastTimestamp - b.lastTimestamp);
+        break;
+      case "rating":
+        groups.sort((a, b) => b.avgRating - a.avgRating);
+        break;
+      case "abv":
+        groups.sort((a, b) => b.avgAbv - a.avgAbv);
+        break;
+    }
+    return groups;
   }, [checkins, sort, grouped]);
 
   if (!profile) return null;
 
-  // BAC и блокировка — от АКТИВНЫХ чекинов (учитывают дебаг-сброс)
-  const bac = calculateBac(activeCheckins, profile);
-  const blocked = isCheckinBlocked(
-    bac,
-    lastWaterAt,
-    Date.now(),
-    activeCheckins,
-    profile,
+  const bac = useMemo(
+    () => (profile ? calculateBac(activeCheckins, profile, now) : 0),
+    [activeCheckins, profile, now],
   );
 
-  const repeatCheckin = (c: Checkin | GroupedCheckin) => {
-    if (blocked) return;
-    const isGrouped = "totalCount" in c;
-    const params: any = {
-      scannedName: c.beerName,
-      scannedType: c.beerType,
-      scannedBarcode: c.scannedBarcode,
-      _scanKey: `repeat-${Date.now()}`,
-    };
-    if (!isGrouped) {
-      params.scannedAbv = String((c as Checkin).abv);
-      params.scannedVolume = String((c as Checkin).volumeMl);
-      params.scannedGlass = (c as Checkin).glassType;
-      params.scannedTasteTags = JSON.stringify((c as Checkin).tasteTags);
-    } else {
-      params.scannedVolume = String((c as GroupedCheckin).totalVolumeMl);
-    }
-    router.push({ pathname: "/checkin", params });
-  };
+  const blocked = useMemo(
+    () =>
+      profile
+        ? getCheckinBlockReason(
+            bac,
+            lastWaterAt,
+            now,
+            activeCheckins,
+            profile,
+          ) !== null
+        : false,
+    [bac, lastWaterAt, now, activeCheckins, profile],
+  );
 
-  const glassLabel = (id: string) =>
-    GLASSES.find((g) => g.id === id)?.emoji ?? "🍺";
+  const repeatCheckin = useCallback(
+    (c: Checkin | GroupedCheckin) => {
+      if (blocked) return;
+      const isGrouped = "totalCount" in c;
+      const source = isGrouped
+        ? (c as GroupedCheckin).lastCheckin
+        : (c as Checkin);
+      const params: Record<string, string | undefined> = {
+        scannedName: source.beerName,
+        scannedType: source.beerType,
+        scannedBarcode: source.scannedBarcode,
+        scannedAbv: String(source.abv),
+        scannedVolume: String(source.volumeMl),
+        scannedGlass: source.glassType,
+        scannedTasteTags: JSON.stringify(source.tasteTags),
+        _scanKey: `repeat-${Date.now()}`,
+      };
+      router.push({ pathname: "/checkin", params });
+    },
+    [blocked, router],
+  );
 
-  const renderItem = ({ item }: { item: Checkin | GroupedCheckin }) => {
-    const isGrouped = "totalCount" in item;
-    const accent = getBeerAccent(
-      isGrouped ? item.beerType : (item as Checkin).beerType,
-    );
-    const isVerified = isGrouped
-      ? !!(item as GroupedCheckin).scannedBarcode
-      : !!(item as Checkin).scannedBarcode;
-    const barcode = isGrouped
-      ? (item as GroupedCheckin).scannedBarcode
-      : (item as Checkin).scannedBarcode;
+  const glassLabel = useCallback(
+    (id: string) => GLASSES.find((g) => g.id === id)?.emoji ?? "🍺",
+    [],
+  );
 
-    return (
-      <View style={styles.card}>
-        <View style={[styles.accent, { backgroundColor: accent }]} />
-        <View style={styles.cardBody}>
-          <View style={styles.cardHeader}>
-            {isVerified && <Text style={styles.verifiedIcon}>✓</Text>}
-            <Text style={styles.glassIcon}>
-              {isGrouped ? "🍺" : glassLabel((item as Checkin).glassType)}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.beerName}>{item.beerName}</Text>
-              <Text style={styles.details}>
-                {isGrouped
-                  ? `${(item as GroupedCheckin).totalCount}× · ${(item as GroupedCheckin).totalVolumeMl} мл · ср. ${(item as GroupedCheckin).avgRating.toFixed(1)} ★`
-                  : `${(item as Checkin).volumeMl} мл · ${(item as Checkin).abv}% · ${(item as Checkin).beerType}`}
+  // renderItem стабилен — FlatList может мемоизировать элементы
+  const renderItem = useCallback(
+    ({ item }: { item: Checkin | GroupedCheckin }) => {
+      const isGrouped = "totalCount" in item;
+      const accent = getBeerAccent(
+        isGrouped ? item.beerType : (item as Checkin).beerType,
+      );
+      const isVerified = isGrouped
+        ? !!(item as GroupedCheckin).scannedBarcode
+        : !!(item as Checkin).scannedBarcode;
+      const barcode = isGrouped
+        ? (item as GroupedCheckin).scannedBarcode
+        : (item as Checkin).scannedBarcode;
+
+      return (
+        <View style={styles.card}>
+          <View style={[styles.accent, { backgroundColor: accent }]} />
+          <View style={styles.cardBody}>
+            <View style={styles.cardHeader}>
+              {isVerified && <Text style={styles.verifiedIcon}>✓</Text>}
+              <Text style={styles.glassIcon}>
+                {isGrouped ? "🍺" : glassLabel((item as Checkin).glassType)}
               </Text>
-              {barcode && (
-                <Text style={styles.barcode}>Штрихкод: {barcode}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.beerName}>{item.beerName}</Text>
+                <Text style={styles.details}>
+                  {isGrouped
+                    ? `${(item as GroupedCheckin).totalCount}× · ${(item as GroupedCheckin).totalVolumeMl} мл · ср. ${(item as GroupedCheckin).avgRating.toFixed(1)} ★ · ${(item as GroupedCheckin).avgAbv.toFixed(1)}%`
+                    : `${(item as Checkin).volumeMl} мл · ${(item as Checkin).abv}% · ${TYPE_LABELS[(item as Checkin).beerType]}`}
+                </Text>
+                {barcode && (
+                  <Text style={styles.barcode}>Штрихкод: {barcode}</Text>
+                )}
+              </View>
+              {!isGrouped && (
+                <Text style={styles.rating}>
+                  {"★".repeat((item as Checkin).rating)}
+                </Text>
               )}
             </View>
-            {!isGrouped && (
-              <Text style={styles.rating}>
-                {"★".repeat((item as Checkin).rating)}
+
+            {!isGrouped && (item as Checkin).tasteTags.length > 0 && (
+              <View style={styles.tags}>
+                {(item as Checkin).tasteTags.map((t) => (
+                  <View key={t} style={styles.tag}>
+                    <Text style={styles.tagText}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.cardFooter}>
+              <Text style={styles.date}>
+                {isGrouped
+                  ? formatHumanDate((item as GroupedCheckin).lastTimestamp)
+                  : formatHumanDate((item as Checkin).timestamp)}
               </Text>
-            )}
-          </View>
-
-          {!isGrouped && (item as Checkin).tasteTags.length > 0 && (
-            <View style={styles.tags}>
-              {(item as Checkin).tasteTags.map((t) => (
-                <View key={t} style={styles.tag}>
-                  <Text style={styles.tagText}>{t}</Text>
-                </View>
-              ))}
+              {!blocked && (
+                <Pressable onPress={() => repeatCheckin(item)} hitSlop={8}>
+                  <Text style={styles.repeat}>↻ Повторить</Text>
+                </Pressable>
+              )}
             </View>
-          )}
-
-          <View style={styles.cardFooter}>
-            <Text style={styles.date}>
-              {isGrouped
-                ? formatHumanDate((item as GroupedCheckin).lastTimestamp)
-                : formatHumanDate((item as Checkin).timestamp)}
-            </Text>
-            {!blocked && (
-              <Pressable onPress={() => repeatCheckin(item)} hitSlop={8}>
-                <Text style={styles.repeat}>↻ Повторить</Text>
-              </Pressable>
-            )}
           </View>
         </View>
-      </View>
-    );
-  };
+      );
+    },
+    [blocked, glassLabel, repeatCheckin],
+  );
 
   return (
     <View style={styles.container}>

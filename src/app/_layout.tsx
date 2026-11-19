@@ -1,7 +1,6 @@
 import { useRouter, useSegments } from "expo-router";
 import { Drawer } from "expo-router/drawer";
 import { useEffect } from "react";
-import { StyleSheet, Text } from "react-native";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 
@@ -16,14 +15,19 @@ const MENU_ITEMS = [
 
 export default function RootLayout() {
   const profile = useAppStore((s) => s.profile);
+  const hasHydrated = useAppStore((s) => s.hasHydrated);
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    if (!hasHydrated) return;
+
     const inOnboarding = segments[0] === "onboarding";
     if (!profile && !inOnboarding) router.replace("/onboarding");
     else if (profile && inOnboarding) router.replace("/");
-  }, [profile, segments]);
+  }, [profile, segments, hasHydrated, router]);
+
+  if (!hasHydrated) return null;
 
   return (
     <Drawer
@@ -39,39 +43,9 @@ export default function RootLayout() {
         <Drawer.Screen
           key={item.name}
           name={item.name}
-          options={{
-            title: item.label,
-            drawerLabel: ({ focused }) => (
-              <Text
-                style={[
-                  styles.drawerLabel,
-                  focused && styles.drawerLabelActive,
-                ]}
-              >
-                {item.label}
-              </Text>
-            ),
-          }}
+          options={{ title: item.label, drawerLabel: item.label }}
         />
       ))}
-      {/* Только скрытые экраны — их не должно быть в MENU_ITEMS */}
-      <Drawer.Screen
-        name="onboarding"
-        options={{ drawerItemStyle: { display: "none" } }}
-      />
-      <Drawer.Screen
-        name="checkin"
-        options={{ drawerItemStyle: { display: "none" } }}
-      />
-      <Drawer.Screen
-        name="scanner"
-        options={{ drawerItemStyle: { display: "none" } }}
-      />
     </Drawer>
   );
 }
-
-const styles = StyleSheet.create({
-  drawerLabel: { fontSize: 16, fontWeight: "600", marginLeft: 16 },
-  drawerLabelActive: { color: colors.textPrimary, fontWeight: "700" },
-});
