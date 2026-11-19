@@ -1,18 +1,18 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import AppHeader from "../components/AppHeader";
-import SortChips from "../components/SortChips";
-import { useActiveCheckins } from "../hooks/useActiveCheckins";
-import { calculateBac } from "../lib/bac";
-import { getBeerAccent } from "../lib/beerColor";
-import { getCheckinBlockReason } from "../lib/companion";
-import { GLASSES, TYPE_LABELS } from "../lib/constants";
-import { formatHumanDate } from "../lib/dates";
-import { computeStats } from "../lib/stats";
-import { colors } from "../lib/theme";
-import { useAppStore } from "../store/useAppStore";
-import { BeerType, Checkin, SortMode } from "../types";
+import AppHeader from "../../components/AppHeader";
+import SortChips from "../../components/SortChips";
+import { useActiveCheckins } from "../../hooks/useActiveCheckins";
+import { calculateBac } from "../../lib/bac";
+import { getBeerAccent } from "../../lib/beerColor";
+import { getCheckinBlockReason } from "../../lib/companion";
+import { GLASSES, TYPE_LABELS } from "../../lib/constants";
+import { formatHumanDate } from "../../lib/dates";
+import { computeStats } from "../../lib/stats";
+import { colors } from "../../lib/theme";
+import { useAppStore } from "../../store/useAppStore";
+import { BeerType, Checkin, SortMode } from "../../types";
 
 interface RepeatRouteParams {
   scannedName: string;
@@ -128,8 +128,6 @@ export default function HistoryScreen() {
     return groups;
   }, [checkins, sort, grouped]);
 
-  if (!profile) return null;
-
   const bac = useMemo(
     () => (profile ? calculateBac(activeCheckins, profile, now) : 0),
     [activeCheckins, profile, now],
@@ -176,7 +174,6 @@ export default function HistoryScreen() {
     [],
   );
 
-  // renderItem стабилен — FlatList может мемоизировать элементы
   const renderItem = useCallback(
     ({ item }: { item: Checkin | GroupedCheckin }) => {
       const isGrouped = "totalCount" in item;
@@ -189,6 +186,7 @@ export default function HistoryScreen() {
       const barcode = isGrouped
         ? (item as GroupedCheckin).scannedBarcode
         : (item as Checkin).scannedBarcode;
+      const rating = isGrouped ? 0 : (item as Checkin).rating;
 
       return (
         <View style={styles.card}>
@@ -211,9 +209,9 @@ export default function HistoryScreen() {
                 )}
               </View>
               {!isGrouped && (
-                <Text style={styles.rating}>
-                  {"★".repeat((item as Checkin).rating)}
-                </Text>
+                <View accessibilityLabel={`Оценка ${rating} из 5`}>
+                  <Text style={styles.rating}>{"★".repeat(rating)}</Text>
+                </View>
               )}
             </View>
 
@@ -234,7 +232,12 @@ export default function HistoryScreen() {
                   : formatHumanDate((item as Checkin).timestamp)}
               </Text>
               {!blocked && (
-                <Pressable onPress={() => repeatCheckin(item)} hitSlop={8}>
+                <Pressable
+                  onPress={() => repeatCheckin(item)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Повторить ${item.beerName}`}
+                >
                   <Text style={styles.repeat}>↻ Повторить</Text>
                 </Pressable>
               )}
@@ -245,6 +248,9 @@ export default function HistoryScreen() {
     },
     [blocked, glassLabel, repeatCheckin],
   );
+
+  // Ранний return только после всех хуков: при сбросе профиля экран остаётся смонтированным в drawer
+  if (!profile) return null;
 
   return (
     <View style={styles.container}>
@@ -268,6 +274,9 @@ export default function HistoryScreen() {
           <Pressable
             style={[styles.toggle, grouped && styles.toggleActive]}
             onPress={() => setGrouped(!grouped)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: grouped }}
+            accessibilityLabel="Объединять по сортам"
           >
             <View
               style={[styles.toggleTrack, grouped && styles.toggleTrackActive]}

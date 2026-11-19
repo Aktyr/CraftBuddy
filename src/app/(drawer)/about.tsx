@@ -1,10 +1,12 @@
+import Constants from "expo-constants";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AppHeader from "../components/AppHeader";
-import { colors } from "../lib/theme";
+import AppHeader from "../../components/AppHeader";
+import { colors } from "../../lib/theme";
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
+  const version = Constants.expoConfig?.version ?? "1.0.0";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -15,7 +17,7 @@ export default function AboutScreen() {
           { paddingBottom: insets.bottom + 24 },
         ]}
       >
-        <Text style={styles.subtitle}>CraftBuddy v1.0.0</Text>
+        <Text style={styles.subtitle}>CraftBuddy v{version}</Text>
 
         <Text style={styles.body}>
           Умный трекер дегустации пива с виртуальным компаньоном. Приложение

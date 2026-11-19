@@ -1,17 +1,10 @@
 import * as Haptics from "expo-haptics";
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AppHeader from "../components/AppHeader";
-import { colors } from "../lib/theme";
-import { useAppStore } from "../store/useAppStore";
+import AppHeader from "../../components/AppHeader";
+import { confirmAsync, showInfo } from "../../lib/dialog";
+import { colors } from "../../lib/theme";
+import { useAppStore } from "../../store/useAppStore";
 
 export default function DebugScreen() {
   const insets = useSafeAreaInsets();
@@ -33,24 +26,15 @@ export default function DebugScreen() {
     );
   }
 
-  const handleReset = () => {
-    const doReset = () => {
-      resetBac();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (Platform.OS === "web") {
-        window.alert("BAC сброшен до 0");
-      } else {
-        Alert.alert("Готово", "BAC = 0");
-      }
-    };
-    if (Platform.OS === "web") {
-      if (window.confirm("Сбросить BAC до 0?")) doReset();
-    } else {
-      Alert.alert("Сбросить BAC?", "Текущий уровень опьянения будет обнулён.", [
-        { text: "Отмена", style: "cancel" },
-        { text: "Сбросить", onPress: doReset },
-      ]);
-    }
+  const handleReset = async () => {
+    const confirmed = await confirmAsync(
+      "Сбросить BAC?",
+      "Текущий уровень опьянения будет обнулён.",
+    );
+    if (!confirmed) return;
+    resetBac();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showInfo("Готово", "BAC = 0");
   };
 
   return (

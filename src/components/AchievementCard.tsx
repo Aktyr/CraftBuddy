@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderWarm,
   },
   cardLocked: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: colors.surfaceDisabled,
     borderColor: colors.border,
     opacity: 0.7,
   },

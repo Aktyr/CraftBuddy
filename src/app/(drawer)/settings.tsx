@@ -1,57 +1,43 @@
 import Slider from "@react-native-community/slider";
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import AppHeader from "../components/AppHeader";
-import { colors } from "../lib/theme";
-import { useAppStore } from "../store/useAppStore";
-import { Gender } from "../types";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import AppHeader from "../../components/AppHeader";
+import { confirmDestructiveAsync, showInfo } from "../../lib/dialog";
+import { colors } from "../../lib/theme";
+import { useAppStore } from "../../store/useAppStore";
+import { Gender } from "../../types";
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { profile, setProfile, resetAll } = useAppStore();
   const [weight, setWeight] = useState(profile?.weightKg ?? 70);
   const [gender, setGender] = useState<Gender>(profile?.gender ?? "male");
+  const version = Constants.expoConfig?.version ?? "1.0.0";
+
+  // Синхронизация локальных состояний с профилем при его изменении извне
+  useEffect(() => {
+    if (profile) {
+      setWeight(profile.weightKg);
+      setGender(profile.gender);
+    }
+  }, [profile]);
 
   const save = () => {
     setProfile({ weightKg: Math.round(weight), gender });
-    if (Platform.OS === "web") {
-      window.alert("Сохранено. Профиль обновлён.");
-    } else {
-      Alert.alert("Сохранено", "Профиль обновлён");
-    }
+    showInfo("Сохранено", "Профиль обновлён.");
   };
 
-  const confirmReset = () => {
-    const doReset = () => {
-      resetAll();
-      router.replace("/onboarding");
-    };
-    if (Platform.OS === "web") {
-      if (
-        window.confirm(
-          "Сбросить всё? История, профиль и достижения будут удалены.",
-        )
-      )
-        doReset();
-    } else {
-      Alert.alert(
-        "Сбросить всё?",
-        "История, профиль и достижения будут удалены.",
-        [
-          { text: "Отмена", style: "cancel" },
-          { text: "Сбросить", style: "destructive", onPress: doReset },
-        ],
-      );
-    }
+  const confirmReset = async () => {
+    const confirmed = await confirmDestructiveAsync(
+      "Сбросить всё?",
+      "История, профиль и достижения будут удалены.",
+      "Сбросить",
+    );
+    if (!confirmed) return;
+    resetAll();
+    router.replace("/onboarding");
   };
 
   return (
@@ -99,7 +85,7 @@ export default function SettingsScreen() {
           <Text style={styles.resetBtnText}>🗑 Сбросить всю историю</Text>
         </Pressable>
 
-        <Text style={styles.version}>CraftBuddy v1.0.0</Text>
+        <Text style={styles.version}>CraftBuddy v{version}</Text>
       </ScrollView>
     </View>
   );

@@ -2,6 +2,7 @@ export const colors = {
   // Базовые
   bg: "#FFFBEB",
   surface: "#FFFFFF",
+  surfaceDisabled: "#F3F4F6",
   border: "#E5E7EB",
   borderWarm: "#FDE68A",
 

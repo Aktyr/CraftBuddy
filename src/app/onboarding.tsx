@@ -1,17 +1,21 @@
 import Slider from "@react-native-community/slider";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { Gender } from "../types";
 
 export default function Onboarding() {
+  const profile = useAppStore((s) => s.profile);
   const setProfile = useAppStore((s) => s.setProfile);
   const router = useRouter();
   const [weight, setWeight] = useState(70);
   const [gender, setGender] = useState<Gender | null>(null);
 
   const canContinue = gender !== null;
+
+  if (profile) return <Redirect href="/" />;
 
   return (
     <View style={styles.container}>
@@ -27,9 +31,9 @@ export default function Onboarding() {
           step={1}
           value={weight}
           onValueChange={setWeight}
-          minimumTrackTintColor="#F59E0B"
-          maximumTrackTintColor="#E5E7EB"
-          thumbTintColor="#F59E0B"
+          minimumTrackTintColor={colors.primary}
+          maximumTrackTintColor={colors.inactive}
+          thumbTintColor={colors.primary}
         />
         <View style={styles.range}>
           <Text style={styles.rangeText}>40</Text>
@@ -88,40 +92,48 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: colors.bg,
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
-    color: "#78350F",
+    color: colors.textPrimary,
     marginBottom: 8,
   },
-  subtitle: { fontSize: 14, color: "#92400E", marginBottom: 32 },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 32 },
   block: { marginBottom: 28 },
-  label: { fontSize: 16, fontWeight: "600", color: "#78350F", marginBottom: 8 },
+  label: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
   slider: { width: "100%", height: 40 },
   range: { flexDirection: "row", justifyContent: "space-between" },
-  rangeText: { fontSize: 12, color: "#92400E" },
+  rangeText: { fontSize: 12, color: colors.textSecondary },
   row: { flexDirection: "row", gap: 12 },
   option: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
   },
-  optionActive: { borderColor: "#F59E0B", backgroundColor: "#FEF3C7" },
-  optionText: { fontSize: 15, color: "#6B7280", fontWeight: "500" },
-  optionTextActive: { color: "#78350F", fontWeight: "700" },
+  optionActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
+  },
+  optionText: { fontSize: 15, color: colors.textMuted, fontWeight: "500" },
+  optionTextActive: { color: colors.textPrimary, fontWeight: "700" },
   button: {
     marginTop: 16,
     paddingVertical: 16,
     borderRadius: 12,
-    backgroundColor: "#F59E0B",
+    backgroundColor: colors.primary,
     alignItems: "center",
   },
   buttonDisabled: { opacity: 0.4 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  buttonText: { color: colors.surface, fontSize: 16, fontWeight: "700" },
 });

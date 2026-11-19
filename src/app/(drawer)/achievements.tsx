@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import AchievementCard from "../components/AchievementCard";
-import AppHeader from "../components/AppHeader";
-import { ACHIEVEMENTS, getUnlockedAchievements } from "../lib/achievements";
-import { colors } from "../lib/theme";
-import { useAppStore } from "../store/useAppStore";
+import AchievementCard from "../../components/AchievementCard";
+import AppHeader from "../../components/AppHeader";
+import { ACHIEVEMENTS, getUnlockedAchievements } from "../../lib/achievements";
+import { colors } from "../../lib/theme";
+import { useAppStore } from "../../store/useAppStore";
 
 export default function AchievementsScreen() {
   const checkins = useAppStore((s) => s.checkins);

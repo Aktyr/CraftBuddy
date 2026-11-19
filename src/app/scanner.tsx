@@ -5,35 +5,98 @@ import {
 } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { ComponentProps, useCallback, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { findBeerByBarcode } from "../lib/beers";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
-import { BeerType, Checkin } from "../types";
+import { Checkin } from "../types";
 
-interface ScannerRouteParams {
-  scannedBarcode: string;
-  scannedName?: string;
-  scannedAbv?: string;
-  scannedType?: BeerType;
-  scannedVolume?: string;
-  scannedGlass?: string;
-  scannedTasteTags?: string;
-  _scanKey: string;
-}
+// Конфигурация вынесена из рендера: новый объект пропа пересоздаёт сессию захвата
+const BARCODE_SETTINGS: ComponentProps<
+  typeof CameraView
+>["barcodeScannerSettings"] = {
+  barcodeTypes: ["ean13", "ean8", "code128", "qr", "datamatrix"],
+};
 
+// Монтаж камеры в одном кадре с переходом на экран роняет сессию захвата на iOS
+const CAMERA_MOUNT_DELAY_MS = 250;
+
+/** Экран сканирования штрихкода с переходом на предзаполненный чекин. */
 export default function ScannerScreen() {
-  const checkins = useAppStore((s) => s.checkins);
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
+  const [cameraMounted, setCameraMounted] = useState(false);
+  const scannedRef = useRef(false);
+  // Флаг отмены async-операций при уходе с экрана
+  const cancelledRef = useRef(false);
+  const cameraAllowed = permission?.granted ?? false;
 
-  // Сбрасываем scanned при каждом входе на экран
   useFocusEffect(
     useCallback(() => {
-      setScanned(false);
-    }, []),
+      scannedRef.current = false;
+      cancelledRef.current = false;
+      const timer = cameraAllowed
+        ? setTimeout(() => setCameraMounted(true), CAMERA_MOUNT_DELAY_MS)
+        : null;
+      return () => {
+        if (timer !== null) clearTimeout(timer);
+        cancelledRef.current = true;
+        // Экран остаётся смонтированным под верхним экраном стека, превью снимаем сами
+        setCameraMounted(false);
+      };
+    }, [cameraAllowed]),
+  );
+
+  const handleBarcodeScanned = useCallback(
+    async (result: BarcodeScanningResult) => {
+      if (scannedRef.current || cancelledRef.current) return;
+      scannedRef.current = true;
+
+      // Историю читаем в момент сканирования: обработчик обязан быть стабильным,
+      // иначе смена пропа переконфигурирует сканер
+      const checkins = useAppStore.getState().checkins;
+      const beer = findBeerByBarcode(result.data);
+
+      // Берём последний чекин с этим штрихкодом, а не первый
+      let existingCheckin: Checkin | undefined;
+      for (let i = checkins.length - 1; i >= 0; i--) {
+        if (checkins[i].scannedBarcode === result.data) {
+          existingCheckin = checkins[i];
+          break;
+        }
+      }
+
+      const params: Record<string, string | undefined> = {
+        scannedBarcode: result.data,
+      };
+      if (existingCheckin) {
+        params.scannedName = existingCheckin.beerName;
+        params.scannedAbv = String(existingCheckin.abv);
+        params.scannedType = existingCheckin.beerType;
+        params.scannedVolume = String(existingCheckin.volumeMl);
+        params.scannedGlass = existingCheckin.glassType;
+        params.scannedTasteTags = JSON.stringify(existingCheckin.tasteTags);
+      } else if (beer) {
+        params.scannedName = beer.name;
+        params.scannedAbv = String(beer.abv);
+        params.scannedType = beer.type;
+      }
+
+      if (beer || existingCheckin) {
+        await Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        );
+      } else {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+
+      // Если пользователь ушёл со сканера во время await, не навигируем
+      if (cancelledRef.current) return;
+      params._scanKey = Date.now().toString();
+      router.replace({ pathname: "/checkin", params });
+    },
+    [router],
   );
 
   if (!permission) return <View style={styles.container} />;
@@ -55,47 +118,16 @@ export default function ScannerScreen() {
     );
   }
 
-  const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
-    if (scanned) return;
-    setScanned(true);
-    const beer = findBeerByBarcode(result.data);
-    const existingCheckin = checkins.find(
-      (c: Checkin) => c.scannedBarcode === result.data,
-    );
-    const params: Record<string, string | undefined> = {
-      scannedBarcode: result.data,
-      _scanKey: Date.now().toString(),
-    };
-    if (existingCheckin) {
-      params.scannedName = existingCheckin.beerName;
-      params.scannedAbv = String(existingCheckin.abv);
-      params.scannedType = existingCheckin.beerType;
-      params.scannedVolume = String(existingCheckin.volumeMl);
-      params.scannedGlass = existingCheckin.glassType;
-      params.scannedTasteTags = JSON.stringify(existingCheckin.tasteTags);
-    } else if (beer) {
-      params.scannedName = beer.name;
-      params.scannedAbv = String(beer.abv);
-      params.scannedType = beer.type;
-    }
-    if (beer || existingCheckin) {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-    router.replace({ pathname: "/checkin", params });
-  };
-
   return (
     <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        barcodeScannerSettings={{
-          barcodeTypes: ["ean13", "ean8", "code128", "qr", "datamatrix"],
-        }}
-        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-      />
+      {cameraMounted && (
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={BARCODE_SETTINGS}
+          onBarcodeScanned={handleBarcodeScanned}
+        />
+      )}
       <View style={styles.overlay}>
         <Text style={styles.hint}>Наведите камеру на штрихкод бутылки</Text>
         <Pressable style={styles.cancelBtn} onPress={() => router.back()}>

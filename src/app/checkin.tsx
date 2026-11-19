@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -12,6 +12,8 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AppHeader from "../components/AppHeader";
 import TasteChips from "../components/TasteChips";
 import { useActiveCheckins } from "../hooks/useActiveCheckins";
 import { calculateBac } from "../lib/bac";
@@ -30,11 +32,11 @@ import { BeerType, Checkin, GlassId, TasteTag } from "../types";
 
 export default function CheckinScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const profile = useAppStore((s) => s.profile);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
   const addCheckin = useAppStore((s) => s.addCheckin);
   const activeCheckins = useActiveCheckins();
-
   const [name, setName] = useState("");
   const [volume, setVolume] = useState("500");
   const [abv, setAbv] = useState("5");
@@ -42,7 +44,6 @@ export default function CheckinScreen() {
   const [glass, setGlass] = useState<GlassId>(GLASSES[0].id);
   const [beerType, setBeerType] = useState<BeerType>("light");
   const [tasteTags, setTasteTags] = useState<TasteTag[]>([]);
-
   const params = useLocalSearchParams<{
     scannedName?: string;
     scannedAbv?: string;
@@ -60,7 +61,6 @@ export default function CheckinScreen() {
     setBeerType(params.scannedType ?? "light");
     setVolume(params.scannedVolume ?? "500");
     setGlass((params.scannedGlass as GlassId) ?? GLASSES[0].id);
-
     if (params.scannedTasteTags) {
       try {
         setTasteTags(JSON.parse(params.scannedTasteTags) as TasteTag[]);
@@ -70,18 +70,46 @@ export default function CheckinScreen() {
     } else {
       setTasteTags([]);
     }
-
     setRating(0);
   }, [params._scanKey]);
 
+  // ИСПРАВЛЕНО: Вместо Redirect показываем UI с кнопкой "Назад", разрывая навигационную петлю
   if (profile) {
     const now = Date.now();
     const bac = calculateBac(activeCheckins, profile, now);
-    if (
-      getCheckinBlockReason(bac, lastWaterAt, now, activeCheckins, profile) !==
-      null
-    ) {
-      return <Redirect href="/" />;
+    const blockReason = getCheckinBlockReason(
+      bac,
+      lastWaterAt,
+      now,
+      activeCheckins,
+      profile,
+    );
+
+    if (blockReason !== null) {
+      return (
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <AppHeader title="Новый чекин" />
+          <View style={styles.blockedContainer}>
+            <Text style={styles.blockedTitle}>
+              {blockReason === "hard"
+                ? "Критический уровень BAC"
+                : blockReason === "forecast"
+                  ? "Прогноз превышения лимита"
+                  : "Лимит превышен"}
+            </Text>
+            <Text style={styles.blockedText}>
+              {blockReason === "hard"
+                ? "BAC слишком высок. Подождите, пока алкоголь выветрится."
+                : blockReason === "forecast"
+                  ? "Прогнозируется опасный уровень опьянения. Подождите."
+                  : "Добавление пива заблокировано. Выпейте воды или подождите."}
+            </Text>
+            <Pressable style={styles.backButton} onPress={() => router.back()}>
+              <Text style={styles.backButtonText}>Назад</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
     }
   }
 
@@ -110,9 +138,7 @@ export default function CheckinScreen() {
       timestamp: Date.now(),
       scannedBarcode: params.scannedBarcode,
     };
-
     const success = addCheckin(checkin);
-
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -126,120 +152,128 @@ export default function CheckinScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <AppHeader title="Новый чекин" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Text style={styles.title}>Новый чекин</Text>
-
-        <Text style={styles.label}>Название сорта</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Например, Hazy IPA"
-          placeholderTextColor={colors.textLight}
-        />
-
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Объём, мл</Text>
-            <TextInput
-              style={styles.input}
-              value={volume}
-              onChangeText={setVolume}
-              keyboardType="numeric"
-              placeholder="500"
-              placeholderTextColor={colors.textLight}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Крепость, %</Text>
-            <TextInput
-              style={styles.input}
-              value={abv}
-              onChangeText={setAbv}
-              keyboardType="decimal-pad"
-              placeholder="5.0"
-              placeholderTextColor={colors.textLight}
-            />
-          </View>
-        </View>
-
-        <Text style={styles.label}>Тип пива</Text>
-        <View style={styles.row}>
-          {BEER_TYPES.map((t) => (
-            <Pressable
-              key={t}
-              style={[styles.chip, beerType === t && styles.chipActive]}
-              onPress={() => setBeerType(t)}
-            >
-              <View
-                style={[styles.colorDot, { backgroundColor: getBeerAccent(t) }]}
-              />
-              <Text
-                style={[
-                  styles.chipText,
-                  beerType === t && styles.chipTextActive,
-                ]}
-              >
-                {TYPE_LABELS[t]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Оценка</Text>
-        <View style={styles.stars}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
-              <Text style={[styles.star, n <= rating && styles.starActive]}>
-                ★
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Бокал</Text>
-        <View style={styles.row}>
-          {GLASSES.map((g) => (
-            <Pressable
-              key={g.id}
-              style={[styles.chip, glass === g.id && styles.chipActive]}
-              onPress={() => setGlass(g.id)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  glass === g.id && styles.chipTextActive,
-                ]}
-              >
-                {g.emoji} {g.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Вкус</Text>
-        <TasteChips selected={tasteTags} onChange={setTasteTags} />
-
-        <Pressable
-          style={[styles.button, !isValid && styles.buttonDisabled]}
-          disabled={!isValid}
-          onPress={onSave}
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.buttonText}>Сохранить</Text>
-        </Pressable>
-
-        <Pressable style={styles.cancel} onPress={() => router.back()}>
-          <Text style={styles.cancelText}>Отмена</Text>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Text style={styles.title}>Новый чекин</Text>
+          <Text style={styles.label}>Название сорта</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Например, Hazy IPA"
+            placeholderTextColor={colors.textLight}
+          />
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Объём, мл</Text>
+              <TextInput
+                style={styles.input}
+                value={volume}
+                onChangeText={setVolume}
+                keyboardType="numeric"
+                placeholder="500"
+                placeholderTextColor={colors.textLight}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Крепость, %</Text>
+              <TextInput
+                style={styles.input}
+                value={abv}
+                onChangeText={setAbv}
+                keyboardType="decimal-pad"
+                placeholder="5.0"
+                placeholderTextColor={colors.textLight}
+              />
+            </View>
+          </View>
+          <Text style={styles.label}>Тип пива</Text>
+          <View style={styles.row}>
+            {BEER_TYPES.map((t) => (
+              <Pressable
+                key={t}
+                style={[styles.chip, beerType === t && styles.chipActive]}
+                onPress={() => setBeerType(t)}
+              >
+                <View
+                  style={[
+                    styles.colorDot,
+                    { backgroundColor: getBeerAccent(t) },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.chipText,
+                    beerType === t && styles.chipTextActive,
+                  ]}
+                >
+                  {TYPE_LABELS[t]}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>Оценка</Text>
+          <View style={styles.stars}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Pressable
+                key={n}
+                onPress={() => setRating(n)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Оценка ${n}`}
+                accessibilityState={{ selected: n <= rating }}
+              >
+                <Text style={[styles.star, n <= rating && styles.starActive]}>
+                  ★
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>Бокал</Text>
+          <View style={styles.row}>
+            {GLASSES.map((g) => (
+              <Pressable
+                key={g.id}
+                style={[styles.chip, glass === g.id && styles.chipActive]}
+                onPress={() => setGlass(g.id)}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    glass === g.id && styles.chipTextActive,
+                  ]}
+                >
+                  {g.emoji} {g.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={styles.label}>Вкус</Text>
+          <TasteChips selected={tasteTags} onChange={setTasteTags} />
+          <Pressable
+            style={[styles.button, !isValid && styles.buttonDisabled]}
+            disabled={!isValid}
+            onPress={onSave}
+          >
+            <Text style={styles.buttonText}>Сохранить</Text>
+          </Pressable>
+          <Pressable style={styles.cancel} onPress={() => router.back()}>
+            <Text style={styles.cancelText}>Отмена</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -306,4 +340,37 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   cancel: { marginTop: 12, alignItems: "center", paddingVertical: 8 },
   cancelText: { color: colors.textSecondary, fontSize: 14 },
+
+  // Стили для экрана блокировки в чекине
+  blockedContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  blockedTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: colors.dangerText,
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  blockedText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  backButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+  },
+  backButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
 });

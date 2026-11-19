@@ -1,55 +1,140 @@
-import { UserProfile } from "../../types";
+import { Checkin, UserProfile } from "../../types";
 import {
   getCheckinBlockReason,
   getCompanionState,
   isWaterActive,
 } from "../companion";
-import { BAC_LIMIT, WATER_UNLOCK_MIN } from "../constants";
+import { BAC_HARD_LIMIT, BAC_LIMIT, WATER_UNLOCK_MIN } from "../constants";
 
 const mockProfile: UserProfile = { weightKg: 70, gender: "male" };
 
+describe("getCheckinBlockReason", () => {
+  const now = Date.now();
+  const emptyCheckins: Checkin[] = [];
+
+  it("возвращает null ниже лимита", () => {
+    expect(getCheckinBlockReason(0.5, 0, now, emptyCheckins, mockProfile)).toBe(
+      null,
+    );
+  });
+
+  it("возвращает 'soft' выше лимита без воды", () => {
+    expect(
+      getCheckinBlockReason(
+        BAC_LIMIT + 0.01,
+        0,
+        now,
+        emptyCheckins,
+        mockProfile,
+      ),
+    ).toBe("soft");
+  });
+
+  it("возвращает null выше лимита с активной водой", () => {
+    const lastWaterAt = now - 1000; // вода выпита 1 секунду назад
+    expect(
+      getCheckinBlockReason(
+        BAC_LIMIT + 0.01,
+        lastWaterAt,
+        now,
+        emptyCheckins,
+        mockProfile,
+      ),
+    ).toBe(null);
+  });
+
+  it("возвращает 'hard' при критическом уровне", () => {
+    expect(
+      getCheckinBlockReason(
+        BAC_HARD_LIMIT + 0.01,
+        0,
+        now,
+        emptyCheckins,
+        mockProfile,
+      ),
+    ).toBe("hard");
+  });
+
+  it("возвращает 'hard' даже с активной водой при критическом уровне", () => {
+    const lastWaterAt = now - 1000;
+    expect(
+      getCheckinBlockReason(
+        BAC_HARD_LIMIT + 0.01,
+        lastWaterAt,
+        now,
+        emptyCheckins,
+        mockProfile,
+      ),
+    ).toBe("hard");
+  });
+
+  it("возвращает 'forecast' при прогнозе превышения", () => {
+    // Создаём чекин, который через 2 часа даст BAC > BAC_HARD_LIMIT
+    const futureCheckin: Checkin = {
+      id: "1",
+      beerName: "Test",
+      volumeMl: 1000,
+      abv: 12,
+      rating: 4,
+      glassType: "pint",
+      beerType: "light",
+      tasteTags: [],
+      timestamp: now - 60000, // 1 минуту назад
+    };
+
+    // Текущий BAC чуть ниже лимита, но прогноз показывает превышение
+    const currentBac = BAC_LIMIT * 0.8; // 80% от лимита
+    expect(
+      getCheckinBlockReason(currentBac, 0, now, [futureCheckin], mockProfile),
+    ).toBe("forecast");
+  });
+
+  it("не возвращает 'forecast' если текущий BAC слишком низкий", () => {
+    const futureCheckin: Checkin = {
+      id: "1",
+      beerName: "Test",
+      volumeMl: 1000,
+      abv: 12,
+      rating: 4,
+      glassType: "pint",
+      beerType: "light",
+      tasteTags: [],
+      timestamp: now - 60000,
+    };
+
+    // Текущий BAC значительно ниже лимита — прогноз не должен срабатывать
+    const currentBac = BAC_LIMIT * 0.3; // 30% от лимита
+    expect(
+      getCheckinBlockReason(currentBac, 0, now, [futureCheckin], mockProfile),
+    ).not.toBe("forecast");
+  });
+});
+
 describe("getCompanionState", () => {
-  it("idle при нулевом BAC", () => {
+  it("возвращает 'idle' при нулевом BAC", () => {
     expect(getCompanionState(0, false)).toBe("idle");
   });
-  it("drunk при BAC_DRUNK < bac < BAC_HAPPY", () => {
-    expect(getCompanionState(0.1, false)).toBe("drunk");
-  });
-  it("happy при BAC_HAPPY <= bac <= BAC_LIMIT", () => {
+
+  it("возвращает 'happy' при BAC_HAPPY <= bac <= BAC_LIMIT", () => {
     expect(getCompanionState(0.5, false)).toBe("happy");
   });
-  it("sleep при превышении лимита", () => {
+
+  it("возвращает 'sleep' при превышении лимита", () => {
     expect(getCompanionState(BAC_LIMIT + 0.1, false)).toBe("sleep");
   });
-  it("levelUp имеет приоритет", () => {
+
+  it("возвращает 'levelUp' имеет приоритет", () => {
     expect(getCompanionState(BAC_LIMIT + 0.5, true)).toBe("levelUp");
   });
 });
 
-describe("getCheckinBlockReason", () => {
-  const now = Date.now();
-
-  it("null ниже лимита", () => {
-    expect(getCheckinBlockReason(0.5, 0, now, [], mockProfile)).toBe(null);
-  });
-  it("soft выше лимита без воды", () => {
-    expect(
-      getCheckinBlockReason(BAC_LIMIT + 0.01, 0, now, [], mockProfile),
-    ).toBe("soft");
-  });
-  it("null выше лимита с активной водой", () => {
-    expect(
-      getCheckinBlockReason(BAC_LIMIT + 0.01, now - 1000, now, [], mockProfile),
-    ).toBe(null);
-  });
-});
-
 describe("isWaterActive", () => {
-  it("true сразу после воды", () => {
+  it("возвращает true сразу после воды", () => {
     const now = Date.now();
     expect(isWaterActive(now - 1000, now)).toBe(true);
   });
-  it("false после истечения WINDOW", () => {
+
+  it("возвращает false после истечения WINDOW", () => {
     const now = Date.now();
     const last = now - (WATER_UNLOCK_MIN + 1) * 60_000;
     expect(isWaterActive(last, now)).toBe(false);

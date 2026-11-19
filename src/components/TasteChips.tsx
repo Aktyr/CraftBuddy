@@ -18,7 +18,11 @@ export default function TasteChips({ selected, onChange }: Props) {
   };
 
   return (
-    <View style={styles.wrap}>
+    <View
+      style={styles.wrap}
+      accessibilityRole="group"
+      accessibilityLabel="Вкусовые теги"
+    >
       {TASTE_TAGS.map((tag) => {
         const active = selected.includes(tag);
         return (
@@ -26,6 +30,9 @@ export default function TasteChips({ selected, onChange }: Props) {
             key={tag}
             style={[styles.chip, active && styles.chipActive]}
             onPress={() => toggle(tag)}
+            accessibilityRole="checkbox"
+            accessibilityLabel={tag}
+            accessibilityState={{ checked: active }}
           >
             <Text style={[styles.text, active && styles.textActive]}>
               {tag}

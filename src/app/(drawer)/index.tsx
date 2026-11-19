@@ -1,59 +1,49 @@
 import { DrawerActions } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { Link, useFocusEffect, useNavigation } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AppHeader from "../components/AppHeader";
-import BacChart from "../components/BacChart";
-import BeerGlass from "../components/BeerGlass";
-import Companion from "../components/Companion";
-import QrIcon from "../components/icons/QrIcon";
-import { useActiveCheckins } from "../hooks/useActiveCheckins";
-import { calculateBac, calculatePeakBac } from "../lib/bac";
+import AppHeader from "../../components/AppHeader";
+import BacChart from "../../components/BacChart";
+import BeerGlass from "../../components/BeerGlass";
+import Companion from "../../components/Companion";
+import QrIcon from "../../components/icons/QrIcon";
+import { useActiveCheckins } from "../../hooks/useActiveCheckins";
+import { calculateBac, calculatePeakBac } from "../../lib/bac";
 import {
   getCheckinBlockReason,
   getCompanionState,
   isWaterActive,
-} from "../lib/companion";
+} from "../../lib/companion";
 import {
   BAC_HARD_LIMIT,
   BAC_LIMIT,
   LEVEL_XP,
   WATER_UNLOCK_MIN,
-} from "../lib/constants";
-import { computeStats } from "../lib/stats";
-import { colors } from "../lib/theme";
-import { useAppStore } from "../store/useAppStore";
+} from "../../lib/constants";
+import { showInfo } from "../../lib/dialog";
+import { computeStats } from "../../lib/stats";
+import { colors } from "../../lib/theme";
+import { useAppStore } from "../../store/useAppStore";
 
 const LEVEL_UP_DISPLAY_MS = 2000;
 
 export default function Home() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { profile, xp, lastWaterAt, drinkWater } = useAppStore();
+  const { profile, xp, lastWaterAt, drinkWater, resetBac } = useAppStore();
   const activeCheckins = useActiveCheckins();
   const [now, setNow] = useState(Date.now());
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
 
-  // Таймер обновляет now только пока экран в фокусе
+  // ИСПРАВЛЕНО: useCallback вместо useMemo для стабильности ссылки
   useFocusEffect(
-    useMemo(
-      () => () => {
-        const t = setInterval(() => setNow(Date.now()), 5_000);
-        return () => clearInterval(t);
-      },
-      [],
-    ),
+    useCallback(() => {
+      const t = setInterval(() => setNow(Date.now()), 5_000);
+      return () => clearInterval(t);
+    }, []),
   );
 
   useEffect(() => {
@@ -70,7 +60,6 @@ export default function Home() {
     }
   }, [xp]);
 
-  // useMemo ДО early return — иначе ломается правило хуков React
   const stats = useMemo(() => computeStats(activeCheckins), [activeCheckins]);
 
   if (!profile) return null;
@@ -107,7 +96,12 @@ export default function Home() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <BeerGlass fillLevel={fillLevel} size={130} beerType={lastType} />
+        <BeerGlass
+          fillLevel={fillLevel}
+          size={130}
+          beerType={lastType}
+          accessibilityLabel={`Бокал заполнен на ${Math.round(fillLevel * 100)} процентов`}
+        />
         <Companion state={state} />
         <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
         <Text style={styles.muted}>
@@ -122,6 +116,7 @@ export default function Home() {
           </View>
         ) : null}
         <BacChart checkins={activeCheckins} profile={profile} now={now} />
+
         {blockReason === "hard" ? (
           <View style={styles.blocked}>
             <Text style={styles.blockedTitle}>Критический уровень</Text>
@@ -133,6 +128,18 @@ export default function Home() {
               Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки:{" "}
               {BAC_HARD_LIMIT})
             </Text>
+            <Pressable
+              style={styles.resetBtn}
+              onPress={() => {
+                resetBac();
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success,
+                );
+                showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
+              }}
+            >
+              <Text style={styles.resetBtnText}>Сбросить BAC</Text>
+            </Pressable>
           </View>
         ) : blockReason !== null ? (
           <View style={styles.blocked}>
@@ -152,32 +159,46 @@ export default function Home() {
                 onPress={() => {
                   drinkWater();
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  if (Platform.OS === "web") {
-                    window.alert(
-                      `Блокировка снята на ${WATER_UNLOCK_MIN} минут`,
-                    );
-                  } else {
-                    Alert.alert(
-                      "Блокировка снята",
-                      `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
-                    );
-                  }
+                  showInfo(
+                    "Блокировка снята",
+                    `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
+                  );
                 }}
               >
                 <Text style={styles.waterText}>Выпить воды</Text>
               </Pressable>
             )}
+            <Pressable
+              style={styles.resetBtn}
+              onPress={() => {
+                resetBac();
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success,
+                );
+                showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
+              }}
+            >
+              <Text style={styles.resetBtnText}>Сбросить BAC</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.primaryActions}>
             <Link href="/checkin" asChild>
-              <Pressable style={styles.bigBtn}>
+              <Pressable
+                style={styles.bigBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Добавить пиво"
+              >
                 <Text style={styles.bigBtnIcon}>+</Text>
                 <Text style={styles.bigBtnText}>Добавить пиво</Text>
               </Pressable>
             </Link>
             <Link href="/scanner" asChild>
-              <Pressable style={styles.scanBtn}>
+              <Pressable
+                style={styles.scanBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Сканировать штрихкод"
+              >
                 <QrIcon color={colors.textPrimary} size={32} />
               </Pressable>
             </Link>
@@ -281,4 +302,18 @@ const styles = StyleSheet.create({
   },
   waterText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   hint: { marginTop: 12, fontSize: 12, color: colors.infoText },
+  resetBtn: {
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  resetBtnText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
 });

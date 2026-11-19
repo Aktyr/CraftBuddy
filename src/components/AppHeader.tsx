@@ -30,32 +30,49 @@ export default function AppHeader({
         },
       ]}
     >
-      {/* Кнопка слева с видимым хитбоксом */}
+      {/* Левая колонка: бургер на Home, стрелка на остальных */}
       <View style={styles.left}>
-        <Pressable
-          onPress={isHome ? onMenuPress : () => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            pressed && styles.iconBtnPressed,
-          ]}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={isHome ? "menu" : "chevron-back"}
-            size={28}
-            color={colors.textPrimary}
-          />
-        </Pressable>
+        {isHome ? (
+          <Pressable
+            onPress={onMenuPress}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && styles.iconBtnPressed,
+            ]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Меню"
+          >
+            <Ionicons name="menu" size={28} color={colors.textPrimary} />
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && styles.iconBtnPressed,
+            ]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Назад"
+          >
+            <Ionicons
+              name="chevron-back"
+              size={28}
+              color={colors.textPrimary}
+            />
+          </Pressable>
+        )}
       </View>
 
-      {/* Заголовок по центру */}
+      {/* Центр: заголовок */}
       <View style={styles.center}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
       </View>
 
-      {/* Пустой блок справа для симметрии */}
+      {/* Правая колонка: пустая для симметрии */}
       <View style={styles.right} />
     </View>
   );
@@ -93,7 +110,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "transparent",
   },
   iconBtnPressed: {
     backgroundColor: colors.primarySoft,
