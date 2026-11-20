@@ -21,14 +21,13 @@ import { getBeerAccent } from "../lib/beerColor";
 import { getCheckinBlockReason } from "../lib/companion";
 import {
   BEER_TYPES,
-  GLASSES,
   MAX_ABV_PERCENT,
   MAX_VOLUME_ML,
   TYPE_LABELS,
 } from "../lib/constants";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
-import { BeerType, Checkin, GlassId, TasteTag } from "../types";
+import { BeerType, Checkin, TasteTag } from "../types";
 
 export default function CheckinScreen() {
   const router = useRouter();
@@ -36,12 +35,13 @@ export default function CheckinScreen() {
   const profile = useAppStore((s) => s.profile);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
   const addCheckin = useAppStore((s) => s.addCheckin);
+  const updateCheckin = useAppStore((s) => s.updateCheckin);
+  const checkins = useAppStore((s) => s.checkins);
   const activeCheckins = useActiveCheckins();
   const [name, setName] = useState("");
   const [volume, setVolume] = useState("500");
   const [abv, setAbv] = useState("5");
   const [rating, setRating] = useState(0);
-  const [glass, setGlass] = useState<GlassId>(GLASSES[0].id);
   const [beerType, setBeerType] = useState<BeerType>("light");
   const [tasteTags, setTasteTags] = useState<TasteTag[]>([]);
   const params = useLocalSearchParams<{
@@ -50,31 +50,49 @@ export default function CheckinScreen() {
     scannedBarcode?: string;
     scannedType?: BeerType;
     scannedVolume?: string;
-    scannedGlass?: string;
     scannedTasteTags?: string;
+    scannedRating?: string;
+    returnTo?: string;
     _scanKey?: string;
+    editId?: string;
   }>();
 
+  const editingCheckin = params.editId
+    ? checkins.find((c) => c.id === params.editId)
+    : null;
+
+  const isRepeatMode = !!params.scannedName && !editingCheckin;
+
   useEffect(() => {
-    setName(params.scannedName ?? "");
-    setAbv(params.scannedAbv ?? "5");
-    setBeerType(params.scannedType ?? "light");
-    setVolume(params.scannedVolume ?? "500");
-    setGlass((params.scannedGlass as GlassId) ?? GLASSES[0].id);
-    if (params.scannedTasteTags) {
-      try {
-        setTasteTags(JSON.parse(params.scannedTasteTags) as TasteTag[]);
-      } catch {
+    if (editingCheckin) {
+      setName(editingCheckin.beerName);
+      setAbv(String(editingCheckin.abv));
+      setBeerType(editingCheckin.beerType);
+      setVolume(String(editingCheckin.volumeMl));
+      setTasteTags(editingCheckin.tasteTags);
+      setRating(editingCheckin.rating);
+    } else {
+      setName(params.scannedName ?? "");
+      setAbv(params.scannedAbv ?? "5");
+      setBeerType(params.scannedType ?? "light");
+      setVolume(params.scannedVolume ?? "500");
+      if (params.scannedTasteTags) {
+        try {
+          setTasteTags(JSON.parse(params.scannedTasteTags) as TasteTag[]);
+        } catch {
+          setTasteTags([]);
+        }
+      } else {
         setTasteTags([]);
       }
-    } else {
-      setTasteTags([]);
+      const scannedRating = params.scannedRating
+        ? parseInt(params.scannedRating, 10)
+        : 0;
+      setRating(scannedRating);
     }
-    setRating(0);
-  }, [params._scanKey]);
+  }, [params._scanKey, params.editId, editingCheckin]);
 
-  // ИСПРАВЛЕНО: Вместо Redirect показываем UI с кнопкой "Назад", разрывая навигационную петлю
-  if (profile) {
+  if (profile && !editingCheckin) {
     const now = Date.now();
     const bac = calculateBac(activeCheckins, profile, now);
     const blockReason = getCheckinBlockReason(
@@ -84,7 +102,6 @@ export default function CheckinScreen() {
       activeCheckins,
       profile,
     );
-
     if (blockReason !== null) {
       return (
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -126,34 +143,68 @@ export default function CheckinScreen() {
     rating > 0;
 
   const onSave = () => {
-    const checkin: Checkin = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      beerName: name.trim(),
-      volumeMl: volumeNum,
-      abv: abvNum,
-      rating,
-      glassType: glass,
-      beerType,
-      tasteTags,
-      timestamp: Date.now(),
-      scannedBarcode: params.scannedBarcode,
-    };
-    const success = addCheckin(checkin);
-    if (success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+    if (editingCheckin) {
+      const success = updateCheckin(editingCheckin.id, {
+        beerName: name.trim(),
+        volumeMl: volumeNum,
+        abv: abvNum,
+        rating,
+        beerType,
+        tasteTags,
+      });
+      if (success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert("Ошибка", "Не удалось сохранить изменения");
+      }
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
-        "Добавление заблокировано",
-        "Превышен лимит BAC или сработал превентивный запрет. Выпейте воды или подождите.",
-      );
+      const checkin: Checkin = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        beerName: name.trim(),
+        volumeMl: volumeNum,
+        abv: abvNum,
+        rating,
+        glassType: profile?.preferredGlass ?? "pint",
+        beerType,
+        tasteTags,
+        timestamp: Date.now(),
+        scannedBarcode: params.scannedBarcode,
+      };
+      const success = addCheckin(checkin);
+      if (success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (params.returnTo === "home") {
+          router.replace("/");
+        } else {
+          router.back();
+        }
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Alert.alert(
+          "Добавление заблокировано",
+          "Превышен лимит BAC или сработал превентивный запрет. Выпейте воды или подождите.",
+        );
+      }
     }
   };
 
+  const headerTitle = editingCheckin
+    ? "Редактирование чекина"
+    : isRepeatMode
+      ? "Повторение чекина"
+      : "Новый чекин";
+
+  const buttonText = editingCheckin
+    ? "Сохранить изменения"
+    : isRepeatMode
+      ? "Повторить"
+      : "Сохранить";
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <AppHeader title="Новый чекин" />
+      <AppHeader title={headerTitle} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -165,36 +216,39 @@ export default function CheckinScreen() {
           ]}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>Новый чекин</Text>
+          <Text style={styles.title}>{headerTitle}</Text>
           <Text style={styles.label}>Название сорта</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, isRepeatMode && styles.inputDisabled]}
             value={name}
             onChangeText={setName}
             placeholder="Например, Hazy IPA"
             placeholderTextColor={colors.textLight}
+            editable={!isRepeatMode}
           />
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Объём, мл</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, isRepeatMode && styles.inputDisabled]}
                 value={volume}
                 onChangeText={setVolume}
                 keyboardType="numeric"
                 placeholder="500"
                 placeholderTextColor={colors.textLight}
+                editable={!isRepeatMode}
               />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Крепость, %</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, isRepeatMode && styles.inputDisabled]}
                 value={abv}
                 onChangeText={setAbv}
                 keyboardType="decimal-pad"
                 placeholder="5.0"
                 placeholderTextColor={colors.textLight}
+                editable={!isRepeatMode}
               />
             </View>
           </View>
@@ -203,8 +257,13 @@ export default function CheckinScreen() {
             {BEER_TYPES.map((t) => (
               <Pressable
                 key={t}
-                style={[styles.chip, beerType === t && styles.chipActive]}
-                onPress={() => setBeerType(t)}
+                style={[
+                  styles.chip,
+                  beerType === t && styles.chipActive,
+                  isRepeatMode && styles.chipDisabled,
+                ]}
+                onPress={() => !isRepeatMode && setBeerType(t)}
+                disabled={isRepeatMode}
               >
                 <View
                   style={[
@@ -228,45 +287,37 @@ export default function CheckinScreen() {
             {[1, 2, 3, 4, 5].map((n) => (
               <Pressable
                 key={n}
-                onPress={() => setRating(n)}
+                onPress={() => !isRepeatMode && setRating(n)}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={`Оценка ${n}`}
                 accessibilityState={{ selected: n <= rating }}
+                disabled={isRepeatMode}
               >
-                <Text style={[styles.star, n <= rating && styles.starActive]}>
+                <Text
+                  style={[
+                    styles.star,
+                    n <= rating && styles.starActive,
+                    isRepeatMode && styles.starDisabled,
+                  ]}
+                >
                   ★
                 </Text>
               </Pressable>
             ))}
           </View>
-          <Text style={styles.label}>Бокал</Text>
-          <View style={styles.row}>
-            {GLASSES.map((g) => (
-              <Pressable
-                key={g.id}
-                style={[styles.chip, glass === g.id && styles.chipActive]}
-                onPress={() => setGlass(g.id)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    glass === g.id && styles.chipTextActive,
-                  ]}
-                >
-                  {g.emoji} {g.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
           <Text style={styles.label}>Вкус</Text>
-          <TasteChips selected={tasteTags} onChange={setTasteTags} />
+          <TasteChips
+            selected={tasteTags}
+            onChange={setTasteTags}
+            disabled={isRepeatMode}
+          />
           <Pressable
             style={[styles.button, !isValid && styles.buttonDisabled]}
             disabled={!isValid}
             onPress={onSave}
           >
-            <Text style={styles.buttonText}>Сохранить</Text>
+            <Text style={styles.buttonText}>{buttonText}</Text>
           </Pressable>
           <Pressable style={styles.cancel} onPress={() => router.back()}>
             <Text style={styles.cancelText}>Отмена</Text>
@@ -301,10 +352,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
+  inputDisabled: {
+    backgroundColor: colors.surfaceDisabled,
+    color: colors.textMuted,
+  },
   row: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   stars: { flexDirection: "row", gap: 6 },
   star: { fontSize: 36, color: colors.inactive },
   starActive: { color: colors.primary },
+  starDisabled: { opacity: 0.5 },
   chip: {
     flexDirection: "row",
     alignItems: "center",
@@ -320,6 +376,9 @@ const styles = StyleSheet.create({
   chipActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
+  },
+  chipDisabled: {
+    opacity: 0.5,
   },
   colorDot: {
     width: 12,
@@ -340,8 +399,6 @@ const styles = StyleSheet.create({
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   cancel: { marginTop: 12, alignItems: "center", paddingVertical: 8 },
   cancelText: { color: colors.textSecondary, fontSize: 14 },
-
-  // Стили для экрана блокировки в чекине
   blockedContainer: {
     flex: 1,
     justifyContent: "center",

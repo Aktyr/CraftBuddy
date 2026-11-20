@@ -6,20 +6,28 @@ import { colors } from "../lib/theme";
 
 const HEADER_HEIGHT = 56;
 
+export interface HeaderAction {
+  key: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  label: string;
+}
+
 interface Props {
   title: string;
   isHome?: boolean;
   onMenuPress?: () => void;
+  rightActions?: HeaderAction[];
 }
 
 export default function AppHeader({
   title,
   isHome = false,
   onMenuPress,
+  rightActions,
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
   return (
     <View
       style={[
@@ -30,7 +38,6 @@ export default function AppHeader({
         },
       ]}
     >
-      {/* Левая колонка: бургер на Home, стрелка на остальных */}
       <View style={styles.left}>
         {isHome ? (
           <Pressable
@@ -64,16 +71,28 @@ export default function AppHeader({
           </Pressable>
         )}
       </View>
-
-      {/* Центр: заголовок */}
       <View style={styles.center}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
       </View>
-
-      {/* Правая колонка: пустая для симметрии */}
-      <View style={styles.right} />
+      <View style={styles.right}>
+        {rightActions?.map((action) => (
+          <Pressable
+            key={action.key}
+            onPress={action.onPress}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              pressed && styles.iconBtnPressed,
+            ]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+          >
+            <Ionicons name={action.icon} size={24} color={colors.textPrimary} />
+          </Pressable>
+        ))}
+      </View>
     </View>
   );
 }
@@ -98,6 +117,11 @@ const styles = StyleSheet.create({
   },
   right: {
     width: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    overflow: "visible",
+    paddingRight: 8,
   },
   title: {
     fontSize: 18,

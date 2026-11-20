@@ -5,7 +5,6 @@ import {
   BAC_HAPPY,
   BAC_HARD_LIMIT,
   BAC_LIMIT,
-  PREVENTIVE_THRESHOLD,
   WATER_UNLOCK_MIN,
 } from "./constants";
 
@@ -30,21 +29,34 @@ export function getCheckinBlockReason(
     return "soft";
   }
   const peakBac = calculatePeakBac(checkins, profile, now);
-  if (peakBac > BAC_HARD_LIMIT && bac > BAC_LIMIT * PREVENTIVE_THRESHOLD) {
+  if (peakBac > BAC_HARD_LIMIT) {
     return "forecast";
   }
   return null;
 }
 
+/**
+ * Состояние компаньона оценивается по прогнозируемому пику BAC,
+ * а не по текущей точке. Это даёт упреждающие сообщения:
+ * компаньон предупреждает до того, как лимит будет достигнут.
+ */
 export function getCompanionState(
   bac: number,
   justLeveledUp: boolean,
+  peakBac?: number,
 ): CompanionState {
   if (justLeveledUp) return "levelUp";
-  if (bac > BAC_HARD_LIMIT) return "sleep";
-  if (bac > BAC_LIMIT) return "sleep";
-  if (bac >= BAC_HAPPY) return "happy";
-  if (bac > BAC_DRUNK) return "drunk";
+
+  // Источник истины для состояний — прогноз, если он передан
+  const effectiveBac = peakBac ?? bac;
+
+  if (effectiveBac > BAC_HARD_LIMIT) return "critical";
+  if (effectiveBac > BAC_LIMIT) {
+    // Прогноз плохой, но текущий BAC ещё низкий — отдельное сообщение
+    return bac < BAC_HAPPY ? "forecast" : "warning";
+  }
+  if (effectiveBac >= BAC_HAPPY) return "cheerful";
+  if (effectiveBac > BAC_DRUNK) return "happy";
   return "idle";
 }
 

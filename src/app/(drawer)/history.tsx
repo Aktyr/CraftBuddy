@@ -1,13 +1,20 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import AppHeader from "../../components/AppHeader";
-import SortChips from "../../components/SortChips";
+import FilterModal from "../../components/FilterModal";
 import { useActiveCheckins } from "../../hooks/useActiveCheckins";
 import { calculateBac } from "../../lib/bac";
 import { getBeerAccent } from "../../lib/beerColor";
 import { getCheckinBlockReason } from "../../lib/companion";
-import { GLASSES, TYPE_LABELS } from "../../lib/constants";
+import { TYPE_LABELS } from "../../lib/constants";
 import { formatHumanDate } from "../../lib/dates";
 import { computeStats } from "../../lib/stats";
 import { colors } from "../../lib/theme";
@@ -22,6 +29,7 @@ interface RepeatRouteParams {
   scannedVolume: string;
   scannedGlass: string;
   scannedTasteTags: string;
+  returnTo?: string;
   _scanKey: string;
 }
 
@@ -46,9 +54,12 @@ export default function HistoryScreen() {
   const activeCheckins = useActiveCheckins();
   const [sort, setSort] = useState<SortMode>("fresh");
   const [grouped, setGrouped] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<React.ElementRef<typeof TextInput>>(null);
   const [now, setNow] = useState(Date.now());
 
-  // Таймер только пока экран в фокусе — для актуальности blocked
   useFocusEffect(
     useCallback(() => {
       const t = setInterval(() => setNow(Date.now()), 30_000);
@@ -75,7 +86,6 @@ export default function HistoryScreen() {
         break;
     }
     if (!grouped) return arr;
-
     const groupedMap = new Map<string, GroupedCheckin>();
     for (const c of arr) {
       const key = c.beerName.toLowerCase();
@@ -128,6 +138,12 @@ export default function HistoryScreen() {
     return groups;
   }, [checkins, sort, grouped]);
 
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return sorted;
+    const q = searchQuery.toLowerCase();
+    return sorted.filter((item) => item.beerName.toLowerCase().includes(q));
+  }, [sorted, searchQuery]);
+
   const bac = useMemo(
     () => (profile ? calculateBac(activeCheckins, profile, now) : 0),
     [activeCheckins, profile, now],
@@ -162,6 +178,8 @@ export default function HistoryScreen() {
         scannedVolume: String(source.volumeMl),
         scannedGlass: source.glassType,
         scannedTasteTags: JSON.stringify(source.tasteTags),
+        scannedRating: String(source.rating),
+        returnTo: "home",
         _scanKey: `repeat-${Date.now()}`,
       };
       router.push({ pathname: "/checkin", params });
@@ -169,11 +187,15 @@ export default function HistoryScreen() {
     [blocked, router],
   );
 
-  const glassLabel = useCallback(
-    (id: string) => GLASSES.find((g) => g.id === id)?.emoji ?? "🍺",
-    [],
+  const editCheckin = useCallback(
+    (c: Checkin) => {
+      router.push({
+        pathname: "/checkin",
+        params: { editId: c.id },
+      });
+    },
+    [router],
   );
-
   const renderItem = useCallback(
     ({ item }: { item: Checkin | GroupedCheckin }) => {
       const isGrouped = "totalCount" in item;
@@ -187,16 +209,12 @@ export default function HistoryScreen() {
         ? (item as GroupedCheckin).scannedBarcode
         : (item as Checkin).scannedBarcode;
       const rating = isGrouped ? 0 : (item as Checkin).rating;
-
       return (
         <View style={styles.card}>
           <View style={[styles.accent, { backgroundColor: accent }]} />
           <View style={styles.cardBody}>
             <View style={styles.cardHeader}>
               {isVerified && <Text style={styles.verifiedIcon}>✓</Text>}
-              <Text style={styles.glassIcon}>
-                {isGrouped ? "🍺" : glassLabel((item as Checkin).glassType)}
-              </Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.beerName}>{item.beerName}</Text>
                 <Text style={styles.details}>
@@ -214,7 +232,6 @@ export default function HistoryScreen() {
                 </View>
               )}
             </View>
-
             {!isGrouped && (item as Checkin).tasteTags.length > 0 && (
               <View style={styles.tags}>
                 {(item as Checkin).tasteTags.map((t) => (
@@ -224,72 +241,97 @@ export default function HistoryScreen() {
                 ))}
               </View>
             )}
-
             <View style={styles.cardFooter}>
               <Text style={styles.date}>
                 {isGrouped
                   ? formatHumanDate((item as GroupedCheckin).lastTimestamp)
                   : formatHumanDate((item as Checkin).timestamp)}
               </Text>
-              {!blocked && (
-                <Pressable
-                  onPress={() => repeatCheckin(item)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Повторить ${item.beerName}`}
-                >
-                  <Text style={styles.repeat}>↻ Повторить</Text>
-                </Pressable>
-              )}
+              <View style={styles.cardActions}>
+                {!isGrouped && !blocked && (
+                  <Pressable
+                    onPress={() => editCheckin(item as Checkin)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Редактировать ${item.beerName}`}
+                  >
+                    <Text style={styles.edit}>✎</Text>
+                  </Pressable>
+                )}
+                {!blocked && (
+                  <Pressable
+                    onPress={() => repeatCheckin(item)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Повторить ${item.beerName}`}
+                  >
+                    <Text style={styles.repeat}>↻ Повторить</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           </View>
         </View>
       );
     },
-    [blocked, glassLabel, repeatCheckin],
+    [blocked, repeatCheckin],
   );
 
-  // Ранний return только после всех хуков: при сбросе профиля экран остаётся смонтированным в drawer
   if (!profile) return null;
 
   return (
     <View style={styles.container}>
-      <AppHeader title="История" />
+      <AppHeader
+        title="История"
+        rightActions={[
+          {
+            key: "search",
+            icon: searchOpen ? "close" : "search",
+            onPress: () => {
+              if (searchOpen) {
+                setSearchOpen(false);
+                setSearchQuery("");
+              } else {
+                setSearchOpen(true);
+                setTimeout(() => searchInputRef.current?.focus(), 100);
+              }
+            },
+            label: searchOpen ? "Закрыть поиск" : "Поиск",
+          },
+          {
+            key: "filter",
+            icon: "funnel",
+            onPress: () => setFilterOpen(true),
+            label: "Фильтры",
+          },
+        ]}
+      />
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.subtitle}>
-            {stats.totalCount} чекинов ·{" "}
-            {(stats.totalVolumeMl / 1000).toFixed(1)} л · ср.{" "}
+            {stats.totalCount} чекинов ·
+            {(stats.totalVolumeMl / 1000).toFixed(1)} л · ср.
             {stats.avgRating.toFixed(1)} ★
           </Text>
           <Text style={styles.favorite}>
-            Любимый стиль: {stats.favoriteStyle} · Бокал: {stats.favoriteGlass}
+            Любимый стиль: {stats.favoriteStyle}
           </Text>
         </View>
 
-        <SortChips value={sort} onChange={setSort} />
-
-        <View style={styles.groupToggle}>
-          <Text style={styles.groupLabel}>Объединять по сортам</Text>
-          <Pressable
-            style={[styles.toggle, grouped && styles.toggleActive]}
-            onPress={() => setGrouped(!grouped)}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: grouped }}
-            accessibilityLabel="Объединять по сортам"
-          >
-            <View
-              style={[styles.toggleTrack, grouped && styles.toggleTrackActive]}
-            >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  grouped && styles.toggleThumbActive,
-                ]}
-              />
-            </View>
-          </Pressable>
-        </View>
+        {searchOpen && (
+          <View style={styles.searchBar}>
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Поиск по названию..."
+              placeholderTextColor={colors.textLight}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        )}
 
         {checkins.length === 0 ? (
           <View style={styles.empty}>
@@ -298,9 +340,16 @@ export default function HistoryScreen() {
               Пока пусто. Самое время открыть что-то новое!
             </Text>
           </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyEmoji}>🔍</Text>
+            <Text style={styles.emptyText}>
+              Ничего не найдено по запросу «{searchQuery}»
+            </Text>
+          </View>
         ) : (
           <FlatList
-            data={sorted}
+            data={filtered}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             contentContainerStyle={styles.list}
@@ -308,6 +357,15 @@ export default function HistoryScreen() {
           />
         )}
       </View>
+
+      <FilterModal
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        sort={sort}
+        onSortChange={setSort}
+        grouped={grouped}
+        onGroupedChange={setGrouped}
+      />
     </View>
   );
 }
@@ -318,34 +376,22 @@ const styles = StyleSheet.create({
   header: { marginBottom: 12 },
   subtitle: { fontSize: 14, color: colors.textSecondary },
   favorite: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
-  groupToggle: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    marginBottom: 8,
+  searchBar: {
+    marginBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    paddingBottom: 12,
   },
-  groupLabel: { fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
-  toggle: { padding: 4 },
-  toggleActive: {},
-  toggleTrack: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.inactive,
-    justifyContent: "center",
-    paddingHorizontal: 2,
-  },
-  toggleTrackActive: { backgroundColor: colors.primary },
-  toggleThumb: {
-    width: 20,
-    height: 20,
+  searchInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 10,
-    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: colors.textPrimary,
   },
-  toggleThumbActive: { marginLeft: 20 },
   list: { paddingBottom: 24 },
   card: {
     flexDirection: "row",
@@ -365,7 +411,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginRight: 6,
   },
-  glassIcon: { fontSize: 22, marginRight: 8 },
   beerName: {
     fontSize: 16,
     fontWeight: "bold",
@@ -389,7 +434,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
+  cardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   date: { fontSize: 12, color: colors.textLight },
+  edit: { fontSize: 18, color: colors.infoText, fontWeight: "600" },
   repeat: { fontSize: 13, color: colors.infoText, fontWeight: "600" },
   empty: { flex: 1, justifyContent: "center", alignItems: "center" },
   emptyEmoji: { fontSize: 64, marginBottom: 16 },

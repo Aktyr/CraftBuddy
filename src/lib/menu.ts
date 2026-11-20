@@ -8,6 +8,7 @@ export interface MenuItem {
 export const MENU_ITEMS: MenuItem[] = [
   { name: "index", label: "🏠 Главная" },
   { name: "history", label: "📋 История" },
+  { name: "skins", label: "🎨 Скины" },
   { name: "achievements", label: "🏆 Достижения" },
   { name: "settings", label: "⚙️ Настройки" },
   { name: "about", label: "ℹ️ О приложении" },

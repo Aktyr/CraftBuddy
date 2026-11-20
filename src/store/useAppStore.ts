@@ -2,11 +2,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import { create } from "zustand";
 import { createJSONStorage, persist, StateStorage } from "zustand/middleware";
+import { getUnlockedAchievements } from "../lib/achievements";
 import { calculateBac } from "../lib/bac";
 import { findBeerByBarcode } from "../lib/beers";
 import { getCheckinBlockReason } from "../lib/companion";
-import { XP_DUPLICATE, XP_NEW_BEER, XP_SCAN_BONUS } from "../lib/constants";
-import { Checkin, UserProfile } from "../types";
+import {
+  GLASSES,
+  XP_DUPLICATE,
+  XP_NEW_BEER,
+  XP_PER_ACHIEVEMENT,
+  XP_SCAN_BONUS,
+} from "../lib/constants";
+import { AchievementId, Checkin, SortMode, UserProfile } from "../types";
 
 // В React Native window есть, а localStorage нет, поэтому на устройствах пишем в AsyncStorage.
 // Проверка window нужна только для серверного рендера веба
@@ -36,22 +43,31 @@ export interface AppState {
   waterCount: number;
   lastBacReset: number | null;
   hasHydrated: boolean;
+  claimedAchievements: AchievementId[];
+  historySort: SortMode;
+  historyGrouped: boolean;
   setProfile: (profile: UserProfile) => void;
   addCheckin: (checkin: Checkin) => boolean;
+  updateCheckin: (id: string, patch: Partial<Checkin>) => boolean;
   drinkWater: () => void;
   resetAll: () => void;
   resetBac: () => void;
   setHasHydrated: (v: boolean) => void;
+  setHistorySort: (mode: SortMode) => void;
+  setHistoryGrouped: (v: boolean) => void;
 }
 
 const initialState: Omit<
   AppState,
   | "setProfile"
   | "addCheckin"
+  | "updateCheckin"
   | "drinkWater"
   | "resetAll"
   | "resetBac"
   | "setHasHydrated"
+  | "setHistorySort"
+  | "setHistoryGrouped"
 > = {
   profile: null,
   checkins: [],
@@ -60,6 +76,9 @@ const initialState: Omit<
   waterCount: 0,
   lastBacReset: null,
   hasHydrated: false,
+  claimedAchievements: [],
+  historySort: "fresh",
+  historyGrouped: false,
 };
 
 export const useAppStore = create<AppState>()(
@@ -68,6 +87,8 @@ export const useAppStore = create<AppState>()(
       ...initialState,
       setProfile: (profile) => set({ profile }),
       setHasHydrated: (v) => set({ hasHydrated: v }),
+      setHistorySort: (mode) => set({ historySort: mode }),
+      setHistoryGrouped: (v) => set({ historyGrouped: v }),
       addCheckin: (checkin) => {
         const state = get();
         if (!state.profile) return false;
@@ -97,17 +118,51 @@ export const useAppStore = create<AppState>()(
           checkin.scannedBarcode && findBeerByBarcode(checkin.scannedBarcode)
             ? XP_SCAN_BONUS
             : 0;
+        // Начисляем XP за новые достижения после добавления чекина
+        const newUnlocked = getUnlockedAchievements(
+          newCheckins,
+          state.waterCount,
+        );
+        const newlyClaimed = [...newUnlocked].filter(
+          (id) => !state.claimedAchievements.includes(id),
+        );
+        const achievementXp = newlyClaimed.length * XP_PER_ACHIEVEMENT;
         set({
           checkins: newCheckins,
-          xp: state.xp + baseXp + scanBonus,
+          xp: state.xp + baseXp + scanBonus + achievementXp,
+          claimedAchievements: [...state.claimedAchievements, ...newlyClaimed],
         });
         return true;
       },
-      drinkWater: () =>
+      updateCheckin: (id, patch) => {
+        const state = get();
+        const idx = state.checkins.findIndex((c) => c.id === id);
+        if (idx === -1) return false;
+        const updated: Checkin = { ...state.checkins[idx], ...patch, id };
+        const newCheckins = [...state.checkins];
+        newCheckins[idx] = updated;
+        set({ checkins: newCheckins });
+        return true;
+      },
+      drinkWater: () => {
+        const state = get();
+        const newWaterCount = state.waterCount + 1;
+        // Начисляем XP за новые достижения после питья воды
+        const newUnlocked = getUnlockedAchievements(
+          state.checkins,
+          newWaterCount,
+        );
+        const newlyClaimed = [...newUnlocked].filter(
+          (id) => !state.claimedAchievements.includes(id),
+        );
+        const achievementXp = newlyClaimed.length * XP_PER_ACHIEVEMENT;
         set({
           lastWaterAt: Date.now(),
-          waterCount: get().waterCount + 1,
-        }),
+          waterCount: newWaterCount,
+          xp: state.xp + achievementXp,
+          claimedAchievements: [...state.claimedAchievements, ...newlyClaimed],
+        });
+      },
       resetBac: () => set({ lastBacReset: Date.now() }),
       resetAll: () => set({ ...initialState, hasHydrated: true }),
     }),
@@ -115,7 +170,6 @@ export const useAppStore = create<AppState>()(
       name: "craftbuddy-storage",
       version: 1,
       migrate: (persistedState: any, version: number) => {
-        // Битая запись не должна ронять гидрацию, иначе флаг загрузки не выставится
         if (!persistedState || typeof persistedState !== "object") {
           return persistedState as any;
         }
@@ -128,6 +182,10 @@ export const useAppStore = create<AppState>()(
               return rest;
             });
           }
+        }
+        // Миграция: добавить preferredGlass в старые профили
+        if (persistedState.profile && !persistedState.profile.preferredGlass) {
+          persistedState.profile.preferredGlass = GLASSES[0].id;
         }
         return persistedState as any;
       },
@@ -149,6 +207,8 @@ export const useAppStore = create<AppState>()(
         lastWaterAt: state.lastWaterAt,
         waterCount: state.waterCount,
         lastBacReset: state.lastBacReset,
+        historySort: state.historySort,
+        historyGrouped: state.historyGrouped,
       }),
     },
   ),

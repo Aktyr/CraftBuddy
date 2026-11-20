@@ -6,17 +6,21 @@ import { TasteTag } from "../types";
 interface Props {
   selected: TasteTag[];
   onChange: (tags: TasteTag[]) => void;
+  disabled?: boolean;
 }
-
-export default function TasteChips({ selected, onChange }: Props) {
+export default function TasteChips({
+  selected,
+  onChange,
+  disabled = false,
+}: Props) {
   const toggle = (tag: TasteTag) => {
+    if (disabled) return;
     onChange(
       selected.includes(tag)
         ? selected.filter((t) => t !== tag)
         : [...selected, tag],
     );
   };
-
   return (
     <View
       style={styles.wrap}
@@ -28,11 +32,16 @@ export default function TasteChips({ selected, onChange }: Props) {
         return (
           <Pressable
             key={tag}
-            style={[styles.chip, active && styles.chipActive]}
+            style={[
+              styles.chip,
+              active && styles.chipActive,
+              disabled && styles.chipDisabled,
+            ]}
             onPress={() => toggle(tag)}
             accessibilityRole="checkbox"
             accessibilityLabel={tag}
-            accessibilityState={{ checked: active }}
+            accessibilityState={{ checked: active, disabled }}
+            disabled={disabled}
           >
             <Text style={[styles.text, active && styles.textActive]}>
               {tag}
@@ -57,6 +66,9 @@ const styles = StyleSheet.create({
   chipActive: {
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
+  },
+  chipDisabled: {
+    opacity: 0.5,
   },
   text: { fontSize: 13, color: colors.textMuted },
   textActive: { color: colors.textPrimary, fontWeight: "700" },

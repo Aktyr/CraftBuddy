@@ -2,6 +2,7 @@ import Slider from "@react-native-community/slider";
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { GLASSES } from "../lib/constants";
 import { colors } from "../lib/theme";
 import { useAppStore } from "../store/useAppStore";
 import { Gender } from "../types";
@@ -77,7 +78,11 @@ export default function Onboarding() {
         style={[styles.button, !canContinue && styles.buttonDisabled]}
         disabled={!canContinue}
         onPress={() => {
-          setProfile({ weightKg: Math.round(weight), gender: gender! });
+          setProfile({
+            weightKg: Math.round(weight),
+            gender: gender!,
+            preferredGlass: GLASSES[0].id,
+          });
           router.replace("/");
         }}
       >

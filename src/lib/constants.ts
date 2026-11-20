@@ -9,6 +9,7 @@ export const BAC_DRUNK = 0.05;
 export const XP_NEW_BEER = 15;
 export const XP_DUPLICATE = 5;
 export const XP_SCAN_BONUS = 5;
+export const XP_PER_ACHIEVEMENT = 25;
 
 export const PREVENTIVE_THRESHOLD = 0.7;
 export const MAX_VOLUME_ML = 2000;

@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import AchievementCard from "../../components/AchievementCard";
 import AppHeader from "../../components/AppHeader";
 import { ACHIEVEMENTS, getUnlockedAchievements } from "../../lib/achievements";
+import { XP_PER_ACHIEVEMENT } from "../../lib/constants";
 import { colors } from "../../lib/theme";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -13,6 +14,28 @@ export default function AchievementsScreen() {
     () => getUnlockedAchievements(checkins, waterCount),
     [checkins, waterCount],
   );
+
+  const getProgress = (achievementId: string): string | undefined => {
+    switch (achievementId) {
+      case "first_beer":
+        return checkins.length >= 1 ? undefined : `${checkins.length}/1`;
+      case "taster":
+        return checkins.length >= 10 ? undefined : `${checkins.length}/10`;
+      case "gourmet": {
+        const unique = new Set(checkins.map((c) => c.beerName.toLowerCase()))
+          .size;
+        return unique >= 5 ? undefined : `${unique}/5`;
+      }
+      case "traveler": {
+        const types = new Set(checkins.map((c) => c.beerType)).size;
+        return types >= 5 ? undefined : `${types}/5`;
+      }
+      case "teetotaler":
+        return waterCount >= 5 ? undefined : `${waterCount}/5`;
+      default:
+        return undefined;
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -26,6 +49,8 @@ export default function AchievementsScreen() {
             key={a.id}
             achievement={a}
             unlocked={unlocked.has(a.id)}
+            xpReward={XP_PER_ACHIEVEMENT}
+            progress={getProgress(a.id)}
           />
         ))}
       </ScrollView>

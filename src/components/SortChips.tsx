@@ -43,7 +43,7 @@ export default function SortChips({ value, onChange }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,

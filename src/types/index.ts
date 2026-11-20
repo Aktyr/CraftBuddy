@@ -1,6 +1,13 @@
 export type Gender = "male" | "female";
 export type BeerType = "light" | "dark" | "ipa" | "wheat" | "stout";
-export type CompanionState = "idle" | "happy" | "levelUp" | "drunk" | "sleep";
+export type CompanionState =
+  | "idle"
+  | "happy"
+  | "cheerful"
+  | "warning"
+  | "critical"
+  | "forecast"
+  | "levelUp";
 
 export type GlassId = "tulip" | "pint" | "snifter" | "mug" | "weizen";
 export type TasteTag =
@@ -20,8 +27,8 @@ export type TasteTag =
 export interface UserProfile {
   weightKg: number;
   gender: Gender;
+  preferredGlass: GlassId;
 }
-
 export interface Checkin {
   id: string;
   beerName: string;

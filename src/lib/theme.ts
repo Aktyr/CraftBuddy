@@ -5,18 +5,15 @@ export const colors = {
   surfaceDisabled: "#F3F4F6",
   border: "#E5E7EB",
   borderWarm: "#FDE68A",
-
   // Текст
   textPrimary: "#78350F",
   textSecondary: "#92400E",
   textMuted: "#6B7280",
   textLight: "#9CA3AF",
-
   // Акцент
   primary: "#F59E0B",
   primarySoft: "#FEF3C7",
   primaryDark: "#C27500",
-
   // Состояния
   danger: "#EF4444",
   dangerSoft: "#FEE2E2",
@@ -25,14 +22,20 @@ export const colors = {
   info: "#3B82F6",
   infoSoft: "#DBEAFE",
   infoText: "#2563EB",
-
   // Типы пива (жидкость + полоски)
   beerLight: "#F59E0B",
   beerDark: "#3F2410",
   beerIpa: "#D97706",
   beerWheat: "#FCD34D",
   beerStout: "#1C1108",
-
+  // Палитра цветов пива (градиенты)
+  beerColors: {
+    light: { top: "#FCD34D", bottom: "#F59E0B" },
+    wheat: { top: "#FEF3C7", bottom: "#FCD34D" },
+    ipa: { top: "#F59E0B", bottom: "#D97706" },
+    dark: { top: "#78350F", bottom: "#3F2410" },
+    stout: { top: "#3F2410", bottom: "#1C1108" },
+  },
   // Прочее
   inactive: "#E5E7EB",
   overlay: "rgba(0,0,0,0.6)",

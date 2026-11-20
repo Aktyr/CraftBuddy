@@ -6,7 +6,11 @@ import {
 } from "../companion";
 import { BAC_HARD_LIMIT, BAC_LIMIT, WATER_UNLOCK_MIN } from "../constants";
 
-const mockProfile: UserProfile = { weightKg: 70, gender: "male" };
+const mockProfile: UserProfile = {
+  weightKg: 70,
+  gender: "male",
+  preferredGlass: "pint",
+};
 
 describe("getCheckinBlockReason", () => {
   const now = Date.now();
@@ -111,20 +115,43 @@ describe("getCheckinBlockReason", () => {
 });
 
 describe("getCompanionState", () => {
-  it("возвращает 'idle' при нулевом BAC", () => {
+  it("возвращает 'idle' при нулевом BAC и без прогноза", () => {
     expect(getCompanionState(0, false)).toBe("idle");
   });
 
-  it("возвращает 'happy' при BAC_HAPPY <= bac <= BAC_LIMIT", () => {
-    expect(getCompanionState(0.5, false)).toBe("happy");
+  it("возвращает 'happy' при текущем BAC в диапазоне (BAC_DRUNK, BAC_HAPPY)", () => {
+    expect(getCompanionState(0.1, false)).toBe("happy");
   });
 
-  it("возвращает 'sleep' при превышении лимита", () => {
-    expect(getCompanionState(BAC_LIMIT + 0.1, false)).toBe("sleep");
+  it("возвращает 'cheerful' при текущем BAC >= BAC_HAPPY без прогноза", () => {
+    expect(getCompanionState(0.5, false)).toBe("cheerful");
   });
 
-  it("возвращает 'levelUp' имеет приоритет", () => {
-    expect(getCompanionState(BAC_LIMIT + 0.5, true)).toBe("levelUp");
+  it("оценивает состояние по peakBac, а не по текущему BAC", () => {
+    // Текущий BAC низкий, но прогноз превышает лимит
+    expect(getCompanionState(0.2, false, 1.0)).toBe("forecast");
+    expect(getCompanionState(0.5, false, 1.0)).toBe("warning");
+  });
+
+  it("возвращает 'critical' при peakBac > BAC_HARD_LIMIT", () => {
+    expect(getCompanionState(0.5, false, 2.0)).toBe("critical");
+  });
+
+  it("возвращает 'forecast' при peakBac > BAC_LIMIT и текущем BAC < BAC_HAPPY", () => {
+    expect(getCompanionState(0.1, false, 1.0)).toBe("forecast");
+  });
+
+  it("возвращает 'warning' при peakBac > BAC_LIMIT и текущем BAC >= BAC_HAPPY", () => {
+    expect(getCompanionState(0.5, false, 1.0)).toBe("warning");
+  });
+
+  it("'levelUp' имеет приоритет над любыми состояниями", () => {
+    expect(getCompanionState(2.0, true, 2.0)).toBe("levelUp");
+  });
+
+  it("без peakBac возвращается к оценке по текущему BAC", () => {
+    expect(getCompanionState(0.9, false)).toBe("warning");
+    expect(getCompanionState(1.6, false)).toBe("critical");
   });
 });
 

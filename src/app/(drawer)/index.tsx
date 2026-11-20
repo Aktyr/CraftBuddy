@@ -38,7 +38,6 @@ export default function Home() {
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
 
-  // ИСПРАВЛЕНО: useCallback вместо useMemo для стабильности ссылки
   useFocusEffect(
     useCallback(() => {
       const t = setInterval(() => setNow(Date.now()), 5_000);
@@ -66,7 +65,7 @@ export default function Home() {
 
   const bac = calculateBac(activeCheckins, profile, now);
   const peakBac = calculatePeakBac(activeCheckins, profile, now);
-  const state = getCompanionState(bac, justLeveledUp);
+  const state = getCompanionState(bac, justLeveledUp, peakBac);
   const waterActive = isWaterActive(lastWaterAt, now);
   const blockReason = getCheckinBlockReason(
     bac,
@@ -77,10 +76,7 @@ export default function Home() {
   );
 
   const fillLevel = Math.min(1, peakBac / BAC_LIMIT);
-  const lastType =
-    activeCheckins.length > 0
-      ? activeCheckins[activeCheckins.length - 1].beerType
-      : "light";
+  const beerTypeForGlass = "light";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -99,7 +95,7 @@ export default function Home() {
         <BeerGlass
           fillLevel={fillLevel}
           size={130}
-          beerType={lastType}
+          beerType={beerTypeForGlass}
           accessibilityLabel={`Бокал заполнен на ${Math.round(fillLevel * 100)} процентов`}
         />
         <Companion state={state} />
@@ -112,11 +108,9 @@ export default function Home() {
           <View style={styles.statsRow}>
             <Text style={styles.statItem}>★ {stats.avgRating.toFixed(1)}</Text>
             <Text style={styles.statItem}>🍺 {stats.favoriteStyle}</Text>
-            <Text style={styles.statItem}>{stats.favoriteGlass}</Text>
           </View>
         ) : null}
         <BacChart checkins={activeCheckins} profile={profile} now={now} />
-
         {blockReason === "hard" ? (
           <View style={styles.blocked}>
             <Text style={styles.blockedTitle}>Критический уровень</Text>
@@ -150,24 +144,27 @@ export default function Home() {
             </Text>
             <Text style={styles.blockedText}>
               {blockReason === "forecast"
-                ? "Прогнозируется опасный уровень опьянения. Подождите, пока алкоголь выветрится."
+                ? "Прогнозируется опасный уровень опьянения. Выпейте воды или подождите."
                 : "Добавление пива заблокировано. Выпейте стакан воды, чтобы получить временный доступ."}
             </Text>
-            {blockReason === "soft" && (
-              <Pressable
-                style={styles.waterBtn}
-                onPress={() => {
-                  drinkWater();
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                  showInfo(
-                    "Блокировка снята",
-                    `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
-                  );
-                }}
-              >
-                <Text style={styles.waterText}>Выпить воды</Text>
-              </Pressable>
-            )}
+            {/* Кнопка воды привязана к прогнозу: показываем, пока пик в пределах soft-лимита */}
+            {peakBac > BAC_LIMIT &&
+              peakBac <= BAC_HARD_LIMIT &&
+              !waterActive && (
+                <Pressable
+                  style={styles.waterBtn}
+                  onPress={() => {
+                    drinkWater();
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    showInfo(
+                      "Блокировка снята",
+                      `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
+                    );
+                  }}
+                >
+                  <Text style={styles.waterText}>Выпить воды</Text>
+                </Pressable>
+              )}
             <Pressable
               style={styles.resetBtn}
               onPress={() => {
@@ -199,7 +196,7 @@ export default function Home() {
                 accessibilityRole="button"
                 accessibilityLabel="Сканировать штрихкод"
               >
-                <QrIcon color={colors.textPrimary} size={32} />
+                <QrIcon color={colors.textPrimary} size={42} />
               </Pressable>
             </Link>
           </View>

@@ -13,18 +13,21 @@ export default function Companion({ state }: Props) {
       case "idle":
         return "Ждёт чекина 🍺";
       case "happy":
-        return "Отличный выбор! Cheers! 🍻";
+        return "Отличный выбор! 🍻";
+      case "cheerful":
+        return "Cheers! 🎉";
+      case "warning":
+        return "Пора замедлиться 💧";
+      case "critical":
+        return "Критический уровень! ⚠️";
+      case "forecast":
+        return "Вы пьёте слишком быстро 💧";
       case "levelUp":
-        return "Новый уровень! 🎉";
-      case "drunk":
-        return "Кажется, пора остановиться... 🥴";
-      case "sleep":
-        return "Компаньон спит. Выпейте воды. 💤";
+        return "Новый уровень! 🎊";
       default:
         return "Ждёт чекина 🍺";
     }
   };
-
   return (
     <View style={styles.container}>
       <Text style={styles.text}>{getMessage()}</Text>

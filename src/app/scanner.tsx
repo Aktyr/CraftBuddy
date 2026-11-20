@@ -75,7 +75,6 @@ export default function ScannerScreen() {
         params.scannedAbv = String(existingCheckin.abv);
         params.scannedType = existingCheckin.beerType;
         params.scannedVolume = String(existingCheckin.volumeMl);
-        params.scannedGlass = existingCheckin.glassType;
         params.scannedTasteTags = JSON.stringify(existingCheckin.tasteTags);
       } else if (beer) {
         params.scannedName = beer.name;
