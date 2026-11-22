@@ -29,9 +29,7 @@ describe("dialog", () => {
     it("на веб-платформе вызывает global.alert", () => {
       (Platform as any).OS = "web";
       showInfo("Тест", "Сообщение");
-      expect((globalThis as any).alert).toHaveBeenCalledWith(
-        "Тест\n\nСообщение",
-      );
+      expect((globalThis as any).alert).toHaveBeenCalledWith("Тест\nСообщение");
       expect(Alert.alert as jest.Mock).not.toHaveBeenCalled();
     });
   });
@@ -57,7 +55,7 @@ describe("dialog", () => {
       const result = await confirmAsync("Подтвердить", "Вы уверены?");
       expect(result).toBe(true);
       expect((globalThis as any).confirm).toHaveBeenCalledWith(
-        "Подтвердить\n\nВы уверены?",
+        "Подтвердить\nВы уверены?",
       );
     });
   });

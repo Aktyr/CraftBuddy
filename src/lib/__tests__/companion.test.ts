@@ -73,11 +73,12 @@ describe("getCheckinBlockReason", () => {
   });
 
   it("возвращает 'forecast' при прогнозе превышения", () => {
-    // Создаём чекин, который через 2 часа даст BAC > BAC_HARD_LIMIT
+    // Создаём чекин, который даст пиковый BAC > BAC_LIMIT (0.8), но <= BAC_HARD_LIMIT (1.5)
+    // 500мл * 12% = 47.34г алкоголя. Для 70кг мужчины rawBac ≈ 0.99
     const futureCheckin: Checkin = {
       id: "1",
       beerName: "Test",
-      volumeMl: 1000,
+      volumeMl: 500,
       abv: 12,
       rating: 4,
       glassType: "pint",
@@ -85,12 +86,28 @@ describe("getCheckinBlockReason", () => {
       tasteTags: [],
       timestamp: now - 60000, // 1 минуту назад
     };
-
-    // Текущий BAC чуть ниже лимита, но прогноз показывает превышение
-    const currentBac = BAC_LIMIT * 0.8; // 80% от лимита
+    const currentBac = BAC_LIMIT * 0.5; // 50% от лимита
     expect(
       getCheckinBlockReason(currentBac, 0, now, [futureCheckin], mockProfile),
     ).toBe("forecast");
+  });
+
+  it("не возвращает 'forecast' если прогноз не превышает лимит", () => {
+    const futureCheckin: Checkin = {
+      id: "1",
+      beerName: "Test",
+      volumeMl: 330,
+      abv: 4.5,
+      rating: 4,
+      glassType: "pint",
+      beerType: "light",
+      tasteTags: [],
+      timestamp: now - 60000,
+    };
+    const currentBac = 0.1;
+    expect(
+      getCheckinBlockReason(currentBac, 0, now, [futureCheckin], mockProfile),
+    ).toBe(null);
   });
 
   it("не возвращает 'forecast' если текущий BAC слишком низкий", () => {
