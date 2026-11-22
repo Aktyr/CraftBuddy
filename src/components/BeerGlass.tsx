@@ -10,7 +10,9 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { ClipPath, Defs, G, Path, Rect } from "react-native-svg";
 import { getBeerAccent } from "../lib/beerColor";
+import { getGlassShape } from "../lib/glassShapes";
 import { colors } from "../lib/theme";
+import { GlassId } from "../types";
 import { LiquidLayer } from "../types/LiquidLayer";
 
 const VIEWBOX_WIDTH = 100;
@@ -21,10 +23,6 @@ const GLASS_INNER_HEIGHT = GLASS_BOTTOM - GLASS_TOP;
 const LAYER_ANIMATION_DURATION_MS = 600;
 const LAYER_ANIMATION_GAP_MS = 100;
 const OVERLAP_PX = 3;
-
-const GLASS_OUTLINE = "M 20 10 L 80 10 L 70 130 L 30 130 Z";
-const OUTSIDE_GLASS = `M 0 0 H ${VIEWBOX_WIDTH} V ${VIEWBOX_HEIGHT} H 0 Z ${GLASS_OUTLINE}`;
-
 const AnimatedRect = Animated.createAnimatedComponent(Rect);
 
 interface AnimatedLayerProps {
@@ -101,7 +99,7 @@ interface Props {
   now?: number;
   accessibilityLabel?: string;
   backgroundColor?: string;
-  containerPath?: string;
+  glassId?: GlassId;
 }
 
 export default function BeerGlass({
@@ -110,8 +108,10 @@ export default function BeerGlass({
   now,
   accessibilityLabel,
   backgroundColor = colors.bg,
-  containerPath = GLASS_OUTLINE,
+  glassId = "pint",
 }: Props) {
+  const shape = getGlassShape(glassId);
+  const outsideGlass = `M 0 0 H ${VIEWBOX_WIDTH} V ${VIEWBOX_HEIGHT} H 0 Z ${shape.outline}`;
   const [isFocused, setIsFocused] = useState(false);
   const prevLayersRef = useRef<string>("");
   const animationCounterRef = useRef(0);
@@ -173,14 +173,11 @@ export default function BeerGlass({
           viewBox={`0 0 ${VIEWBOX_WIDTH} ${GLASS_INNER_HEIGHT}`}
         >
           <Defs>
-            <ClipPath id="glassClip">
-              <Path
-                d={`M ${20} ${0} L ${80} ${0} L ${70} ${GLASS_INNER_HEIGHT} L ${30} ${GLASS_INNER_HEIGHT} Z`}
-              />
+            <ClipPath id={`glassClip-${glassId}`}>
+              <Path d={shape.innerOutline} />
             </ClipPath>
           </Defs>
-
-          <G clipPath="url(#glassClip)">
+          <G clipPath={`url(#glassClip-${glassId})`}>
             {layerData.map((data) => (
               <AnimatedLayer
                 key={data.id}
@@ -196,23 +193,32 @@ export default function BeerGlass({
           </G>
         </Svg>
       </View>
-
       <View style={styles.overlay}>
         <Svg
           width={size}
           height={height}
           viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
         >
-          <Path d={OUTSIDE_GLASS} fill={backgroundColor} fillRule="evenodd" />
+          <Path d={outsideGlass} fill={backgroundColor} fillRule="evenodd" />
           <Path
-            d={containerPath}
+            d={shape.outline}
             fill="none"
             stroke={colors.textPrimary}
             strokeWidth="3"
             strokeLinejoin="round"
           />
+          {shape.handlePath && (
+            <Path
+              d={shape.handlePath}
+              fill="none"
+              stroke={colors.textPrimary}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
           <Path
-            d="M 25 20 L 35 120"
+            d={shape.highlightPath}
             fill="none"
             stroke={colors.surface}
             strokeWidth="2"

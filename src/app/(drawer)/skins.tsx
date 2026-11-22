@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AppHeader from "../../components/AppHeader";
+import BeerGlass from "../../components/BeerGlass";
 import { GLASSES } from "../../lib/constants";
 import { colors } from "../../lib/theme";
 import { useAppStore } from "../../store/useAppStore";
@@ -38,7 +39,14 @@ export default function SkinsScreen() {
                 style={[styles.card, active && styles.cardActive]}
                 onPress={() => setSelectedGlass(g.id)}
               >
-                <Text style={styles.emoji}>{g.emoji}</Text>
+                <View style={styles.preview}>
+                  <BeerGlass
+                    layers={[{ beerType: "ipa", heightRatio: 0.6 }]}
+                    size={64}
+                    glassId={g.id}
+                    backgroundColor="transparent"
+                  />
+                </View>
                 <Text style={[styles.label, active && styles.labelActive]}>
                   {g.label}
                 </Text>
@@ -83,7 +91,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
-  emoji: { fontSize: 48, marginBottom: 8 },
+  preview: {
+    width: 64,
+    height: 90,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     color: colors.textMuted,

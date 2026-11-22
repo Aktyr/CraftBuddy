@@ -1,56 +1,100 @@
-# Welcome to your Expo app 👋
+# CraftBuddy
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Умный трекер дегустации пива с виртуальным компаньоном для React Native (Expo SDK 58).
 
-## Get started
+## Возможности
 
-1. Install dependencies
+- Расчёт уровня алкоголя в крови (BAC) по формуле Видмарка с моделью всасывания
+- Виртуальный компаньон, меняющий поведение в зависимости от уровня опьянения
+- Геймификация: система опыта, уровней и достижений
+- Сканирование штрихкодов бутылок через камеру
+- История чекинов с фильтрацией, сортировкой и группировкой по сортам
+- Визуализация динамики BAC на графике
+- Анимированный бокал с послойным отображением выпитого пива
+- 5 скинов бокалов (пинта, тюльпан, снифтер, кружка, вайцен)
+- Блокировка добавления пива при превышении лимита BAC
+- Локальное хранение данных (AsyncStorage / localStorage)
 
-   ```bash
-   npm install
-   ```
+## Технологии
 
-2. Start the app
+- **React Native** 0.88 + **Expo** SDK 58
+- **TypeScript** 6.0
+- **expo-router** - файловая навигация
+- **Zustand** - управление состоянием с персистентностью
+- **react-native-reanimated** - анимации бокала
+- **react-native-svg** - векторная графика (бокал, график, иконки)
+- **expo-camera** - сканирование штрихкодов
+- **expo-haptics** - тактильная обратная связь
+- **Jest** - модульные тесты
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Установка
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## Запуск
 
-### Other setup steps
+```bash
+# Экспонент-разработка
+npm start
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+# Android
+npm run android
 
-## Learn more
+# iOS
+npm run ios
 
-To learn more about developing your project with Expo, look at the following resources:
+# Web
+npm run web
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Тесты
 
-## Join the community
+```bash
+npm test           # одноразовый прогон
+npm run test:watch # режим наблюдения
+```
 
-Join our community of developers creating universal apps.
+## Структура проекта
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+src/
+├── app/                    # Экраны (expo-router)
+│   ├── (drawer)/           # Группа с drawer-навигацией
+│   │   ├── index.tsx       # Главный экран
+│   │   ├── history.tsx     # История чекинов
+│   │   ├── skins.tsx       # Выбор скина бокала
+│   │   ├── achievements.tsx
+│   │   ├── settings.tsx
+│   │   ├── about.tsx
+│   │   └── debug.tsx       # Отладка (только __DEV__)
+│   ├── checkin.tsx         # Добавление/редактирование чекина
+│   ├── scanner.tsx         # Сканирование штрихкода
+│   └── onboarding.tsx      # Первоначальная настройка
+├── components/             # Переиспользуемые компоненты
+├── hooks/                  # Кастомные хуки
+├── lib/                    # Бизнес-логика и утилиты
+│   ├── bac.ts              # Расчёт BAC
+│   ├── companion.ts        # Логика компаньона и блокировок
+│   ├── glassShapes.ts      # SVG-формы бокалов
+│   ├── achievements.ts     # Система достижений
+│   ├── beers.ts            # База штрихкодов
+│   └── ...
+├── store/                  # Zustand-стор
+├── types/                  # TypeScript-типы
+└── data/                   # Статические данные (beers.json)
+```
+
+## Ключевые бизнес-правила
+
+- **BAC** рассчитывается по формуле Видмарка с учётом веса, пола и времени
+- **Лимит BAC**: 0.8‰ - мягкая блокировка (снимается стаканом воды на 10 минут)
+- **Критический BAC**: 1.5‰ - абсолютная блокировка, только время
+- **Прогноз**: если пиковый BAC в ближайшие 2 часа превысит лимит, добавление блокируется превентивно
+- **Опыт**: новый сорт +15 XP, повтор +5 XP, бонус сканирования +5 XP, достижение +25 XP
+- **Уровень**: каждые 50 XP
+
+## Лицензия
+
+Учебный проект, ММУИТ «Академия ТОП», 2026.

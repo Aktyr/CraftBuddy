@@ -94,12 +94,13 @@ export default function Home() {
           layers={liquidLayers}
           size={130}
           now={now}
+          glassId={profile.preferredGlass}
           accessibilityLabel={`Бокал с ${liquidLayers.length} слоями пива`}
         />
         <Companion state={state} />
         <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
         <Text style={styles.muted}>
-          Чекинов: {activeCheckins.length} · XP: {xp} · Ур.{" "}
+          Чекинов: {activeCheckins.length} · XP: {xp} · Ур.
           {Math.floor(xp / LEVEL_XP) + 1}
         </Text>
         {activeCheckins.length > 0 ? (
@@ -117,7 +118,7 @@ export default function Home() {
               подождите, пока алкоголь выветрится.
             </Text>
             <Text style={styles.hardBlockHint}>
-              Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки:{" "}
+              Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки:
               {BAC_HARD_LIMIT})
             </Text>
             {__DEV__ && (
