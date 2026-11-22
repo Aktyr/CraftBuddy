@@ -1,52 +1,124 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
-  useAnimatedStyle,
+  useAnimatedProps,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Path } from "react-native-svg";
+import Svg, { ClipPath, Defs, G, Path, Rect } from "react-native-svg";
 import { getBeerAccent } from "../lib/beerColor";
 import { colors } from "../lib/theme";
-import { BeerType } from "../types";
+import { LiquidLayer } from "../types/LiquidLayer";
 
 const VIEWBOX_WIDTH = 100;
 const VIEWBOX_HEIGHT = 140;
 const GLASS_TOP = 10;
 const GLASS_BOTTOM = 130;
 const GLASS_INNER_HEIGHT = GLASS_BOTTOM - GLASS_TOP;
-const FILL_DURATION_MS = 1000;
+const LAYER_ANIMATION_DURATION_MS = 600;
+const LAYER_ANIMATION_GAP_MS = 100;
+const OVERLAP_PX = 3;
 
 const GLASS_OUTLINE = "M 20 10 L 80 10 L 70 130 L 30 130 Z";
-// Область вне стекла закрашивается цветом подложки: так прямоугольная жидкость
-// обрезается по трапеции без clipPath, который не анимируется на новой архитектуре
 const OUTSIDE_GLASS = `M 0 0 H ${VIEWBOX_WIDTH} V ${VIEWBOX_HEIGHT} H 0 Z ${GLASS_OUTLINE}`;
 
-interface Props {
-  fillLevel: number;
-  size?: number;
-  beerType?: BeerType;
-  accessibilityLabel?: string;
-  /** Цвет фона под бокалом: им закрашивается область вне стекла, должен совпадать с подложкой */
-  backgroundColor?: string;
+const AnimatedRect = Animated.createAnimatedComponent(Rect);
+
+interface AnimatedLayerProps {
+  targetY: number;
+  targetHeight: number;
+  color: string;
+  delay: number;
+  isFocused: boolean;
+  layerId: string;
+  animationKey: number;
 }
 
-/** Бокал с наполнением за секунду. Анимация проигрывается только на видимом экране. */
+function AnimatedLayer({
+  targetY,
+  targetHeight,
+  color,
+  delay,
+  isFocused,
+  layerId,
+  animationKey,
+}: AnimatedLayerProps) {
+  const progress = useSharedValue(0);
+  const animTargetY = useSharedValue(targetY);
+  const animTargetHeight = useSharedValue(targetHeight);
+
+  useEffect(() => {
+    animTargetY.value = targetY;
+    animTargetHeight.value = targetHeight;
+  }, [targetY, targetHeight]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      cancelAnimation(progress);
+      progress.value = 0;
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      cancelAnimation(progress);
+      progress.value = withTiming(1, {
+        duration: LAYER_ANIMATION_DURATION_MS,
+        easing: Easing.out(Easing.quad),
+      });
+    }, delay);
+
+    return () => clearTimeout(timeout);
+  }, [isFocused, delay, animationKey]);
+
+  const animatedProps = useAnimatedProps(() => {
+    const p = progress.value;
+    const currentHeight = animTargetHeight.value * p;
+    const currentY = animTargetY.value + animTargetHeight.value - currentHeight;
+    return {
+      y: currentY,
+      height: currentHeight,
+    };
+  });
+
+  return (
+    <AnimatedRect
+      x={0}
+      y={targetY}
+      width={VIEWBOX_WIDTH}
+      height={targetHeight}
+      fill={color}
+      animatedProps={animatedProps}
+    />
+  );
+}
+
+interface Props {
+  layers: LiquidLayer[];
+  size?: number;
+  now?: number;
+  accessibilityLabel?: string;
+  backgroundColor?: string;
+  containerPath?: string;
+}
+
 export default function BeerGlass({
-  fillLevel,
+  layers,
   size = 130,
-  beerType = "light",
+  now,
   accessibilityLabel,
   backgroundColor = colors.bg,
+  containerPath = GLASS_OUTLINE,
 }: Props) {
   const [isFocused, setIsFocused] = useState(false);
+  const prevLayersRef = useRef<string>("");
+  const animationCounterRef = useRef(0);
   const unit = size / VIEWBOX_WIDTH;
-  const windowHeight = GLASS_INNER_HEIGHT * unit;
+  // Размеры для RN-вёрстки в px; координаты слоёв внутри SVG остаются в единицах viewBox
+  const windowPxHeight = GLASS_INNER_HEIGHT * unit;
   const height = size * (VIEWBOX_HEIGHT / VIEWBOX_WIDTH);
-  const translateY = useSharedValue(windowHeight);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,22 +127,32 @@ export default function BeerGlass({
     }, []),
   );
 
-  useEffect(() => {
-    // Под перекрытым экраном наполнение не запускаем, иначе пользователь его не увидит
-    if (!isFocused) return;
-    const clamped = Math.min(1, Math.max(0, fillLevel));
-    cancelAnimation(translateY);
-    translateY.value = withTiming((1 - clamped) * windowHeight, {
-      duration: FILL_DURATION_MS,
-      easing: Easing.out(Easing.quad),
-    });
-  }, [fillLevel, isFocused, windowHeight]);
+  const layersKey = layers
+    .map((l) => `${l.beerType}-${l.heightRatio.toFixed(3)}`)
+    .join("|");
+  const layersChanged = layersKey !== prevLayersRef.current;
 
-  const liquidStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  if (layersChanged) {
+    prevLayersRef.current = layersKey;
+    animationCounterRef.current += 1;
+  }
 
-  const color = getBeerAccent(beerType);
+  let currentY = GLASS_INNER_HEIGHT;
+  const layerData = layers.map((layer, index) => {
+    const layerHeight = GLASS_INNER_HEIGHT * layer.heightRatio;
+    currentY -= layerHeight;
+    // Перекрытие только между слоями, не для первого
+    const overlap = index > 0 ? OVERLAP_PX : 0;
+    const stepDuration = LAYER_ANIMATION_DURATION_MS + LAYER_ANIMATION_GAP_MS;
+    return {
+      id: `${layer.beerType}-${index}`,
+      targetY: currentY - overlap,
+      targetHeight: layerHeight + overlap,
+      color: getBeerAccent(layer.beerType),
+      delay: index * stepDuration,
+      animationKey: animationCounterRef.current,
+    };
+  });
 
   return (
     <View
@@ -82,17 +164,39 @@ export default function BeerGlass({
       <View
         style={[
           styles.liquidWindow,
-          { top: GLASS_TOP * unit, height: windowHeight },
+          { top: GLASS_TOP * unit, height: windowPxHeight },
         ]}
       >
-        <Animated.View
-          style={[
-            styles.liquid,
-            { height: windowHeight, backgroundColor: color },
-            liquidStyle,
-          ]}
-        />
+        <Svg
+          width={size}
+          height={windowPxHeight}
+          viewBox={`0 0 ${VIEWBOX_WIDTH} ${GLASS_INNER_HEIGHT}`}
+        >
+          <Defs>
+            <ClipPath id="glassClip">
+              <Path
+                d={`M ${20} ${0} L ${80} ${0} L ${70} ${GLASS_INNER_HEIGHT} L ${30} ${GLASS_INNER_HEIGHT} Z`}
+              />
+            </ClipPath>
+          </Defs>
+
+          <G clipPath="url(#glassClip)">
+            {layerData.map((data) => (
+              <AnimatedLayer
+                key={data.id}
+                targetY={data.targetY}
+                targetHeight={data.targetHeight}
+                color={data.color}
+                delay={data.delay}
+                isFocused={isFocused}
+                layerId={data.id}
+                animationKey={data.animationKey}
+              />
+            ))}
+          </G>
+        </Svg>
       </View>
+
       <View style={styles.overlay}>
         <Svg
           width={size}
@@ -101,7 +205,7 @@ export default function BeerGlass({
         >
           <Path d={OUTSIDE_GLASS} fill={backgroundColor} fillRule="evenodd" />
           <Path
-            d={GLASS_OUTLINE}
+            d={containerPath}
             fill="none"
             stroke={colors.textPrimary}
             strokeWidth="3"
@@ -127,12 +231,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     overflow: "hidden",
-  },
-  liquid: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
   },
   overlay: {
     position: "absolute",

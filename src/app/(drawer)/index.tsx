@@ -10,6 +10,7 @@ import BeerGlass from "../../components/BeerGlass";
 import Companion from "../../components/Companion";
 import QrIcon from "../../components/icons/QrIcon";
 import { useActiveCheckins } from "../../hooks/useActiveCheckins";
+import { useLiquidLayers } from "../../hooks/useLiquidLayers";
 import { calculateBac, calculatePeakBac } from "../../lib/bac";
 import {
   getCheckinBlockReason,
@@ -18,7 +19,6 @@ import {
 } from "../../lib/companion";
 import {
   BAC_HARD_LIMIT,
-  BAC_LIMIT,
   LEVEL_XP,
   WATER_UNLOCK_MIN,
 } from "../../lib/constants";
@@ -35,6 +35,7 @@ export default function Home() {
   const { profile, xp, lastWaterAt, drinkWater, resetBac } = useAppStore();
   const activeCheckins = useActiveCheckins();
   const [now, setNow] = useState(Date.now());
+  const liquidLayers = useLiquidLayers(now);
   const [justLeveledUp, setJustLeveledUp] = useState(false);
   const prevLevelRef = useRef(Math.floor(xp / LEVEL_XP));
 
@@ -75,9 +76,6 @@ export default function Home() {
     profile,
   );
 
-  const fillLevel = Math.min(1, peakBac / BAC_LIMIT);
-  const beerTypeForGlass = "light";
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <AppHeader
@@ -93,10 +91,10 @@ export default function Home() {
         showsVerticalScrollIndicator={false}
       >
         <BeerGlass
-          fillLevel={fillLevel}
+          layers={liquidLayers}
           size={130}
-          beerType={beerTypeForGlass}
-          accessibilityLabel={`Бокал заполнен на ${Math.round(fillLevel * 100)} процентов`}
+          now={now}
+          accessibilityLabel={`Бокал с ${liquidLayers.length} слоями пива`}
         />
         <Companion state={state} />
         <Text style={styles.bac}>BAC: {bac.toFixed(3)}</Text>
@@ -122,18 +120,20 @@ export default function Home() {
               Текущий BAC: {bac.toFixed(2)} (макс. для разблокировки:{" "}
               {BAC_HARD_LIMIT})
             </Text>
-            <Pressable
-              style={styles.resetBtn}
-              onPress={() => {
-                resetBac();
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
-                showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
-              }}
-            >
-              <Text style={styles.resetBtnText}>Сбросить BAC</Text>
-            </Pressable>
+            {__DEV__ && (
+              <Pressable
+                style={styles.resetBtn}
+                onPress={() => {
+                  resetBac();
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                  showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
+                }}
+              >
+                <Text style={styles.resetBtnText}>Сбросить BAC</Text>
+              </Pressable>
+            )}
           </View>
         ) : blockReason !== null ? (
           <View style={styles.blocked}>
@@ -147,36 +147,35 @@ export default function Home() {
                 ? "Прогнозируется опасный уровень опьянения. Выпейте воды или подождите."
                 : "Добавление пива заблокировано. Выпейте стакан воды, чтобы получить временный доступ."}
             </Text>
-            {/* Кнопка воды привязана к прогнозу: показываем, пока пик в пределах soft-лимита */}
-            {peakBac > BAC_LIMIT &&
-              peakBac <= BAC_HARD_LIMIT &&
-              !waterActive && (
-                <Pressable
-                  style={styles.waterBtn}
-                  onPress={() => {
-                    drinkWater();
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    showInfo(
-                      "Блокировка снята",
-                      `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
-                    );
-                  }}
-                >
-                  <Text style={styles.waterText}>Выпить воды</Text>
-                </Pressable>
-              )}
-            <Pressable
-              style={styles.resetBtn}
-              onPress={() => {
-                resetBac();
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success,
-                );
-                showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
-              }}
-            >
-              <Text style={styles.resetBtnText}>Сбросить BAC</Text>
-            </Pressable>
+            {!waterActive && (
+              <Pressable
+                style={styles.waterBtn}
+                onPress={() => {
+                  drinkWater();
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  showInfo(
+                    "Блокировка снята",
+                    `Доступ открыт на ${WATER_UNLOCK_MIN} минут`,
+                  );
+                }}
+              >
+                <Text style={styles.waterText}>Выпить воды</Text>
+              </Pressable>
+            )}
+            {__DEV__ && (
+              <Pressable
+                style={styles.resetBtn}
+                onPress={() => {
+                  resetBac();
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success,
+                  );
+                  showInfo("BAC сброшен", "Расчёт начнётся заново с нуля");
+                }}
+              >
+                <Text style={styles.resetBtnText}>Сбросить BAC</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <View style={styles.primaryActions}>

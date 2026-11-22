@@ -19,7 +19,7 @@ import { formatHumanDate } from "../../lib/dates";
 import { computeStats } from "../../lib/stats";
 import { colors } from "../../lib/theme";
 import { useAppStore } from "../../store/useAppStore";
-import { BeerType, Checkin, SortMode } from "../../types";
+import { BeerType, Checkin } from "../../types";
 
 interface RepeatRouteParams {
   scannedName: string;
@@ -52,8 +52,10 @@ export default function HistoryScreen() {
   const profile = useAppStore((s) => s.profile);
   const lastWaterAt = useAppStore((s) => s.lastWaterAt);
   const activeCheckins = useActiveCheckins();
-  const [sort, setSort] = useState<SortMode>("fresh");
-  const [grouped, setGrouped] = useState(false);
+  const historySort = useAppStore((s) => s.historySort);
+  const historyGrouped = useAppStore((s) => s.historyGrouped);
+  const setHistorySort = useAppStore((s) => s.setHistorySort);
+  const setHistoryGrouped = useAppStore((s) => s.setHistoryGrouped);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,7 +73,7 @@ export default function HistoryScreen() {
 
   const sorted = useMemo(() => {
     const arr = [...checkins];
-    switch (sort) {
+    switch (historySort) {
       case "fresh":
         arr.sort((a, b) => b.timestamp - a.timestamp);
         break;
@@ -85,7 +87,7 @@ export default function HistoryScreen() {
         arr.sort((a, b) => b.abv - a.abv);
         break;
     }
-    if (!grouped) return arr;
+    if (!historyGrouped) return arr;
     const groupedMap = new Map<string, GroupedCheckin>();
     for (const c of arr) {
       const key = c.beerName.toLowerCase();
@@ -121,7 +123,7 @@ export default function HistoryScreen() {
       }
     }
     const groups = Array.from(groupedMap.values());
-    switch (sort) {
+    switch (historySort) {
       case "fresh":
         groups.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
         break;
@@ -136,8 +138,7 @@ export default function HistoryScreen() {
         break;
     }
     return groups;
-  }, [checkins, sort, grouped]);
-
+  }, [checkins, historySort, historyGrouped]);
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return sorted;
     const q = searchQuery.toLowerCase();
@@ -361,10 +362,10 @@ export default function HistoryScreen() {
       <FilterModal
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
-        sort={sort}
-        onSortChange={setSort}
-        grouped={grouped}
-        onGroupedChange={setGrouped}
+        sort={historySort}
+        onSortChange={setHistorySort}
+        grouped={historyGrouped}
+        onGroupedChange={setHistoryGrouped}
       />
     </View>
   );

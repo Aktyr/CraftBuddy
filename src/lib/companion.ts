@@ -25,11 +25,14 @@ export function getCheckinBlockReason(
   if (bac > BAC_HARD_LIMIT) {
     return "hard";
   }
-  if (bac > BAC_LIMIT && !isWaterActive(lastWaterAt, now)) {
+  if (bac >= BAC_LIMIT && !isWaterActive(lastWaterAt, now)) {
     return "soft";
   }
   const peakBac = calculatePeakBac(checkins, profile, now);
   if (peakBac > BAC_HARD_LIMIT) {
+    return "hard";
+  }
+  if (peakBac > BAC_LIMIT) {
     return "forecast";
   }
   return null;
